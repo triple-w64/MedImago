@@ -7,7 +7,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 # FileSystemModel
 from PyQt5.QtWidgets import QFileSystemModel, QTreeView, QVBoxLayout
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QModelIndex
 import re
 import win32clipboard as w
 
@@ -18,13 +18,11 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super(MyWindow, self).__init__(parent)
         self.setupUi(self)
+        self.setupMenubar()
         self.setMyCpu()
-        
-        self.tree_view2 = self.create_tree_view()
-        # 将设置好的容器 widget 添加为一个新的 tab
-        self.tabWidget_2.clear()
-        self.tabWidget_2.addTab(self.tree_view2, "")
-        
+        self.setupFileFieldUi()
+
+    def setupMenubar(self):
         action_hello = QAction('Print Hello World', self)
         action_hello.triggered.connect(self.print_hello)
         self.menu_4.addAction(action_hello)
@@ -38,8 +36,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.tree_view.doubleClicked.connect(self.tv_on_double_click)
         self.file_model = QFileSystemModel()
         self.fm = self.file_model
-        # 连接 directoryLoaded 信号到槽函数 on_directory_loaded
-        self.fm.directoryLoaded.connect(self.on_directory_loaded)
+        # # 连接 directoryLoaded 信号到槽函数 on_directory_loaded
+        # self.fm.directoryLoaded.connect(self.on_directory_loaded)
 
         # 创建一个带图标的根项目
         root_icon = self.fm.myComputer(1)
@@ -66,6 +64,38 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.tree_view.expand(self.model.indexFromItem(self.root_item))
         self.tabWidget.addTab(self.tree_view, "My computer")
     
+    def setupFileFieldUi(self):
+        ''''''
+        self.tree_view2 = self.create_tree_view()
+        # 将设置好的容器 widget 添加为一个新的 tab
+        self.tabWidget_2.clear()
+        self.tabWidget_2.addTab(self.tree_view2, "经典列表")
+        self.pushButton.clicked.connect(self.retHigherLvDir)
+        self.tree_view2.doubleClicked.connect(self.tv2_on_double_click)
+        
+    def setRoot(self, index):
+        if isinstance(index, QModelIndex):
+            self.tree_view2.setRootIndex(index)
+            # 检查新的父索引
+            parent_index = self.fm.parent(index)
+            mycpuindex = self.fm.index(self.fm.myComputer())
+            if parent_index == index:
+                print("yes")
+            print("mycpuindex.isValid()", mycpuindex.isValid())
+            # print("Name", self.fm.fileName(parent_index))
+            # up_button
+            self.pushButton.setEnabled(parent_index != index)
+            self.tree_view2.collapseAll()
+        
+    
+    def retHigherLvDir(self):
+        # 获取当前的索引
+        current_index = self.tree_view2.rootIndex()
+        # 获取父级索引
+        parent_index = self.fm.parent(current_index)
+        # 设置新的根路径
+        self.setRoot(parent_index)
+    
     def tv_on_double_click(self, index):
         # 获取被双击的项目
         item = self.model.itemFromIndex(index)
@@ -75,7 +105,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
         # set list tree view root index
         # self.on_directory_loaded(item.path)
-        self.tree_view2.setRootIndex(self.fm.index(item.path))
+        self.setRoot(self.fm.index(item.path))
 
         if item.ismounted:
             return
@@ -89,6 +119,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         #     print('Hello World')
         item.ismounted = True
         
+    def tv2_on_double_click(self, index):
+        self.setRoot(index)
         
     
     def get_drives(self):
@@ -107,21 +139,20 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     def print_hello(self):
         print(self.fm.index(""))
         pass
-    def on_directory_loaded(self, path):
-        index = self.fm.index(path)
-        print(f"Directory loaded: {path}")
-        # self.fm.setRootPath(path)
-        self.tree_view2.setRootIndex(index)
-        # 在这里执行加载目录后的操作
-        # 例如，你可以展开节点、更新状态栏或执行其他任务
+    # def on_directory_loaded(self, path):
+    #     index = self.fm.index(path)
+    #     print(f"Directory loaded: {path}")
+    #     # self.fm.setRootPath(path)
+    #     self.setRoot(index)
+    #     # 在这里执行加载目录后的操作
+    #     # 例如，你可以展开节点、更新状态栏或执行其他任务
         
         
     def create_tree_view(self):
         # 创建一个新的 QTreeView 实例并设置模型等
         tree_view = QTreeView()
-        self.fm.setRootPath('')
+        self.fm.setRootPath('C://')
         tree_view.setModel(self.fm)
-        # tree_view.setRootIndex(file_model.index(""))
         return tree_view
     
 
