@@ -1,0 +1,952 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1047</width>
+    <height>830</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>MedImago_FLEX</string>
+  </property>
+  <property name="layoutDirection">
+   <enum>Qt::LeftToRight</enum>
+  </property>
+  <widget class="QWidget" name="widget1">
+   <widget class="QWidget" name="horizontalLayoutWidget_2">
+    <property name="geometry">
+     <rect>
+      <x>60</x>
+      <y>40</y>
+      <width>801</width>
+      <height>75</height>
+     </rect>
+    </property>
+    <layout class="QHBoxLayout" name="row2">
+     <property name="spacing">
+      <number>10</number>
+     </property>
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item>
+      <widget class="QToolButton" name="toolButton_6">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>18</width>
+         <height>17</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Ctrl+O</string>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font: 25 11pt &quot;3ds&quot;;</string>
+       </property>
+       <property name="text">
+        <string>Open</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="toolButton_2">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>18</width>
+         <height>17</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font: 25 11pt &quot;3ds&quot;;</string>
+       </property>
+       <property name="text">
+        <string>Open CD/VCD</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="toolButton_5">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>18</width>
+         <height>17</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font: 25 11pt &quot;3ds&quot;;</string>
+       </property>
+       <property name="text">
+        <string>Scan For DICOM</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="toolButton_4">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>18</width>
+         <height>17</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font: 25 11pt &quot;3ds&quot;;</string>
+       </property>
+       <property name="text">
+        <string>Export To Images</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="toolButton_3">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>18</width>
+         <height>17</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font: 25 11pt &quot;3ds&quot;;</string>
+       </property>
+       <property name="text">
+        <string>Export To Videos</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="Open">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>18</width>
+         <height>17</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font: 25 11pt &quot;3ds&quot;;</string>
+       </property>
+       <property name="text">
+        <string>Print</string>
+       </property>
+       <property name="icon">
+        <iconset>
+         <normaloff>C:/Users/TripleWs/.designer/res/print.png</normaloff>C:/Users/TripleWs/.designer/res/print.png</iconset>
+       </property>
+       <property name="autoRepeat">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QListView" name="backgroung_main">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>951</width>
+      <height>701</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>微软雅黑</family>
+      <pointsize>12</pointsize>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color:rgb(227, 238 ,240)</string>
+    </property>
+    <property name="lineWidth">
+     <number>0</number>
+    </property>
+    <property name="movement">
+     <enum>QListView::Snap</enum>
+    </property>
+   </widget>
+   <widget class="QGraphicsView" name="graphicsView">
+    <property name="geometry">
+     <rect>
+      <x>330</x>
+      <y>210</y>
+      <width>601</width>
+      <height>271</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QTableWidget" name="tableWidget">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>140</y>
+      <width>251</width>
+      <height>171</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+      <horstretch>12</horstretch>
+      <verstretch>12</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="autoFillBackground">
+     <bool>true</bool>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Panel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Plain</enum>
+    </property>
+    <property name="lineWidth">
+     <number>2</number>
+    </property>
+    <row>
+     <property name="text">
+      <string>Patient</string>
+     </property>
+    </row>
+    <row>
+     <property name="text">
+      <string>Name</string>
+     </property>
+    </row>
+    <row>
+     <property name="text">
+      <string>Age</string>
+     </property>
+    </row>
+    <row>
+     <property name="text">
+      <string>Sex</string>
+     </property>
+    </row>
+   </widget>
+   <zorder>backgroung_main</zorder>
+   <zorder>horizontalLayoutWidget_2</zorder>
+   <zorder>graphicsView</zorder>
+   <zorder>tableWidget</zorder>
+  </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1047</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+     <horstretch>43</horstretch>
+     <verstretch>43</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="minimumSize">
+    <size>
+     <width>58</width>
+     <height>31</height>
+    </size>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>12</pointsize>
+    </font>
+   </property>
+   <property name="autoFillBackground">
+    <bool>false</bool>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background-color:rgb(191, 219, 255)</string>
+   </property>
+   <property name="defaultUp">
+    <bool>false</bool>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+      <horstretch>15</horstretch>
+      <verstretch>15</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="title">
+     <string>File</string>
+    </property>
+    <widget class="QMenu" name="menuExport">
+     <property name="title">
+      <string>Export</string>
+     </property>
+     <addaction name="To_a_picture"/>
+     <addaction name="To_a_video_file"/>
+     <addaction name="To_a_DICOM_file"/>
+     <addaction name="To_a_text_file"/>
+     <addaction name="To_clipbord"/>
+    </widget>
+    <addaction name="New_Window"/>
+    <addaction name="separator"/>
+    <addaction name="Scan_for"/>
+    <addaction name="Open_Window"/>
+    <addaction name="actionOpen_CD_DVD"/>
+    <addaction name="actionOpen_ZIP_file"/>
+    <addaction name="separator"/>
+    <addaction name="menuExport"/>
+    <addaction name="Copy_to_Folder"/>
+    <addaction name="Anoymize"/>
+    <addaction name="separator"/>
+    <addaction name="Print"/>
+    <addaction name="separator"/>
+    <addaction name="Exit"/>
+   </widget>
+   <widget class="QMenu" name="menuNetwork">
+    <property name="title">
+     <string>Network</string>
+    </property>
+    <widget class="QMenu" name="menuSend_to_PACS">
+     <property name="title">
+      <string>Send to PACS</string>
+     </property>
+     <addaction name="Current_Image"/>
+     <addaction name="Current_Series"/>
+     <addaction name="Current_study"/>
+     <addaction name="Current_patient"/>
+     <addaction name="All_patient"/>
+     <addaction name="separator"/>
+     <addaction name="Advanced"/>
+    </widget>
+    <addaction name="Download_from_DICOM_server"/>
+    <addaction name="Network_activity"/>
+    <addaction name="menuSend_to_PACS"/>
+   </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>View</string>
+    </property>
+    <widget class="QMenu" name="menuBrowse_images">
+     <property name="title">
+      <string>Browse images</string>
+     </property>
+     <addaction name="actionNext_Image"/>
+     <addaction name="actionPreviou_Image"/>
+     <addaction name="actionAfter_10_Images"/>
+     <addaction name="actionBefore_10_Images"/>
+     <addaction name="separator"/>
+     <addaction name="actionNext_series"/>
+     <addaction name="actionPreviou_series"/>
+    </widget>
+    <addaction name="actionDICOM_Tags"/>
+    <addaction name="separator"/>
+    <addaction name="actionScroll_Tool"/>
+    <addaction name="menuBrowse_images"/>
+    <addaction name="actionCine"/>
+    <addaction name="separator"/>
+    <addaction name="actionZoom"/>
+    <addaction name="separator"/>
+    <addaction name="actionFull_Screen"/>
+    <addaction name="actionSplit_Screen"/>
+    <addaction name="actionSync"/>
+    <addaction name="separator"/>
+    <addaction name="actionDICOM_Broswer"/>
+    <addaction name="actionDICOM_Tags_Pane"/>
+    <addaction name="actionStatus_Bar"/>
+    <addaction name="actionTool_Bar"/>
+    <addaction name="separator"/>
+    <addaction name="actionTheme"/>
+   </widget>
+   <widget class="QMenu" name="menuImage">
+    <property name="title">
+     <string>Image</string>
+    </property>
+    <addaction name="actionWindowing"/>
+    <addaction name="actionFlip_and_Rotate"/>
+    <addaction name="actionFilters"/>
+    <addaction name="separator"/>
+    <addaction name="actionImage_resize"/>
+    <addaction name="separator"/>
+    <addaction name="actionCopy_to_clipboard"/>
+   </widget>
+   <widget class="QMenu" name="menuMeasure">
+    <property name="title">
+     <string>Measure</string>
+    </property>
+    <addaction name="Distance_D"/>
+    <addaction name="Angle_A"/>
+    <addaction name="Ellipse"/>
+    <addaction name="Rectangle_R"/>
+    <addaction name="Open_curve"/>
+    <addaction name="Free_Hand"/>
+    <addaction name="separator"/>
+    <addaction name="Calibration"/>
+    <addaction name="separator"/>
+    <addaction name="Arrow"/>
+    <addaction name="Text"/>
+    <addaction name="Hide_area"/>
+    <addaction name="separator"/>
+    <addaction name="Edit"/>
+    <addaction name="separator"/>
+    <addaction name="INFO"/>
+    <addaction name="separator"/>
+    <addaction name="Show_Measurement_and_Anotations"/>
+    <addaction name="separator"/>
+    <addaction name="actionMeasure_and_Annotation_Option"/>
+   </widget>
+   <widget class="QMenu" name="menuTools">
+    <property name="title">
+     <string>Tools</string>
+    </property>
+    <addaction name="actionOptions"/>
+    <addaction name="separator"/>
+    <addaction name="actionCustomize"/>
+    <addaction name="separator"/>
+    <addaction name="actionTag_Dictionary"/>
+    <addaction name="actionTag_Manager"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionAbou_Us"/>
+    <addaction name="separator"/>
+    <addaction name="actionSupport_Us"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuNetwork"/>
+   <addaction name="menuView"/>
+   <addaction name="menuImage"/>
+   <addaction name="menuMeasure"/>
+   <addaction name="menuTools"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <widget class="QToolBar" name="Bar_File">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="Open_Window"/>
+   <addaction name="actionOpen_CD_DVD"/>
+   <addaction name="Scan_for"/>
+   <addaction name="separator"/>
+   <addaction name="Print"/>
+   <addaction name="actionHelp"/>
+  </widget>
+  <widget class="QToolBar" name="Bar_Image">
+   <property name="windowTitle">
+    <string>toolBar_2</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="Distance_D"/>
+   <addaction name="Angle_A"/>
+   <addaction name="Ellipse"/>
+   <addaction name="Rectangle_R"/>
+   <addaction name="Open_curve"/>
+   <addaction name="Free_Hand"/>
+   <addaction name="Arrow"/>
+   <addaction name="actionZoom"/>
+  </widget>
+  <widget class="QStatusBar" name="statusBar"/>
+  <action name="New_Window">
+   <property name="text">
+    <string>New Window   Ctrl+N</string>
+   </property>
+  </action>
+  <action name="Open_Window">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/row1/row1.1/window.png</normaloff>../res/row1/row1.1/window.png</iconset>
+   </property>
+   <property name="text">
+    <string>Open Window</string>
+   </property>
+   <property name="iconText">
+    <string>Ctrl + O</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="Scan_for">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/magnifier.png</normaloff>../res/magnifier.png</iconset>
+   </property>
+   <property name="text">
+    <string>Scan for             Ctrl+F</string>
+   </property>
+  </action>
+  <action name="Download_from_DICOM_server">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>C:/Users/TripleWs/.designer/res/cloud-download.png</normaloff>C:/Users/TripleWs/.designer/res/cloud-download.png</iconset>
+   </property>
+   <property name="text">
+    <string>Download from DICOM server...</string>
+   </property>
+  </action>
+  <action name="Network_activity">
+   <property name="text">
+    <string>Network activity
+</string>
+   </property>
+  </action>
+  <action name="actionOpen_CD_DVD">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/cd.png</normaloff>../res/cd.png</iconset>
+   </property>
+   <property name="text">
+    <string>Open CD/DVD</string>
+   </property>
+  </action>
+  <action name="actionOpen_ZIP_file">
+   <property name="text">
+    <string>Open ZIP file</string>
+   </property>
+  </action>
+  <action name="Copy_to_Folder">
+   <property name="text">
+    <string>Copy to Folder</string>
+   </property>
+  </action>
+  <action name="Anoymize">
+   <property name="text">
+    <string>Anoymize</string>
+   </property>
+  </action>
+  <action name="Print">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/printer打印.png</normaloff>../res/printer打印.png</iconset>
+   </property>
+   <property name="text">
+    <string>Print</string>
+   </property>
+  </action>
+  <action name="Exit">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
+  <action name="To_a_picture">
+   <property name="text">
+    <string>To a picture              Shift+P</string>
+   </property>
+  </action>
+  <action name="To_a_video_file">
+   <property name="text">
+    <string>To a video file           Shift+V</string>
+   </property>
+  </action>
+  <action name="To_a_DICOM_file">
+   <property name="text">
+    <string>To a DICOM file        Shift+D</string>
+   </property>
+  </action>
+  <action name="To_a_text_file">
+   <property name="text">
+    <string>To a text file              Shift+T</string>
+   </property>
+  </action>
+  <action name="To_clipbord">
+   <property name="text">
+    <string>To clipbord               Shift+P</string>
+   </property>
+  </action>
+  <action name="actionScroll_Tool">
+   <property name="text">
+    <string>Scroll Tool</string>
+   </property>
+  </action>
+  <action name="actionCine">
+   <property name="text">
+    <string>Cine</string>
+   </property>
+  </action>
+  <action name="actionZoom">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/zoom.png</normaloff>../res/zoom.png</iconset>
+   </property>
+   <property name="text">
+    <string>Zoom</string>
+   </property>
+   <property name="toolTip">
+    <string>Magnifier</string>
+   </property>
+   <property name="statusTip">
+    <string/>
+   </property>
+  </action>
+  <action name="actionDICOM_Tags">
+   <property name="text">
+    <string>DICOM Tags Management</string>
+   </property>
+  </action>
+  <action name="Current_Image">
+   <property name="text">
+    <string>Current Image</string>
+   </property>
+  </action>
+  <action name="Current_Series">
+   <property name="text">
+    <string>Current Series</string>
+   </property>
+  </action>
+  <action name="Current_study">
+   <property name="text">
+    <string>Current study</string>
+   </property>
+  </action>
+  <action name="Current_patient">
+   <property name="text">
+    <string>Current patient</string>
+   </property>
+  </action>
+  <action name="All_patient">
+   <property name="text">
+    <string>All patient</string>
+   </property>
+  </action>
+  <action name="Advanced">
+   <property name="text">
+    <string>Advanced</string>
+   </property>
+  </action>
+  <action name="actionNext_Image">
+   <property name="text">
+    <string>Next Image</string>
+   </property>
+  </action>
+  <action name="actionPreviou_Image">
+   <property name="text">
+    <string>Previou Image</string>
+   </property>
+  </action>
+  <action name="actionAfter_10_Images">
+   <property name="text">
+    <string>After 10 Images</string>
+   </property>
+  </action>
+  <action name="actionBefore_10_Images">
+   <property name="text">
+    <string>Before 10 Images</string>
+   </property>
+  </action>
+  <action name="actionNext_series">
+   <property name="text">
+    <string>Next series</string>
+   </property>
+  </action>
+  <action name="actionPreviou_series">
+   <property name="text">
+    <string>Previou series</string>
+   </property>
+  </action>
+  <action name="actionFull_Screen">
+   <property name="text">
+    <string>Full Screen</string>
+   </property>
+  </action>
+  <action name="actionSplit_Screen">
+   <property name="text">
+    <string>Split Screen</string>
+   </property>
+  </action>
+  <action name="actionSync">
+   <property name="text">
+    <string>Sync</string>
+   </property>
+  </action>
+  <action name="actionDICOM_Broswer">
+   <property name="text">
+    <string>DICOM Broswer</string>
+   </property>
+  </action>
+  <action name="actionDICOM_Tags_Pane">
+   <property name="text">
+    <string>DICOM Tags Pane</string>
+   </property>
+  </action>
+  <action name="actionStatus_Bar">
+   <property name="text">
+    <string>Status Bar</string>
+   </property>
+  </action>
+  <action name="actionTool_Bar">
+   <property name="text">
+    <string>Tool Bar</string>
+   </property>
+  </action>
+  <action name="actionTheme">
+   <property name="text">
+    <string>Theme</string>
+   </property>
+  </action>
+  <action name="actionWindowing">
+   <property name="text">
+    <string>Windowing</string>
+   </property>
+  </action>
+  <action name="actionFlip_and_Rotate">
+   <property name="text">
+    <string>Flip and Rotate</string>
+   </property>
+  </action>
+  <action name="actionFilters">
+   <property name="text">
+    <string>Filters</string>
+   </property>
+  </action>
+  <action name="actionImage_resize">
+   <property name="text">
+    <string>Image resize             Shift+S</string>
+   </property>
+  </action>
+  <action name="actionCopy_to_clipboard">
+   <property name="text">
+    <string>Copy to clipboard     Shift+C</string>
+   </property>
+  </action>
+  <action name="Distance_D">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/distance.png</normaloff>../res/distance.png</iconset>
+   </property>
+   <property name="text">
+    <string>Distance    D</string>
+   </property>
+  </action>
+  <action name="Angle_A">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/Angle.png</normaloff>../res/Angle.png</iconset>
+   </property>
+   <property name="text">
+    <string>Angle         A</string>
+   </property>
+   <property name="toolTip">
+    <string>Measure the Angle</string>
+   </property>
+  </action>
+  <action name="Ellipse">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/Ellipse.png</normaloff>../res/Ellipse.png</iconset>
+   </property>
+   <property name="text">
+    <string>Ellipse</string>
+   </property>
+   <property name="toolTip">
+    <string>Draw a Ellipse</string>
+   </property>
+  </action>
+  <action name="Rectangle_R">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/rectangle.png</normaloff>../res/rectangle.png</iconset>
+   </property>
+   <property name="text">
+    <string>Rectangle    R</string>
+   </property>
+   <property name="toolTip">
+    <string>Draw a Rectangle</string>
+   </property>
+   <property name="statusTip">
+    <string>R</string>
+   </property>
+  </action>
+  <action name="Open_curve">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/curve.png</normaloff>../res/curve.png</iconset>
+   </property>
+   <property name="text">
+    <string>Open curve</string>
+   </property>
+  </action>
+  <action name="Free_Hand">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/hand.png</normaloff>../res/hand.png</iconset>
+   </property>
+   <property name="text">
+    <string>Free Hand</string>
+   </property>
+   <property name="toolTip">
+    <string>Draw with ur mouse</string>
+   </property>
+  </action>
+  <action name="Calibration">
+   <property name="text">
+    <string>Calibration</string>
+   </property>
+  </action>
+  <action name="Arrow">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/arrow.png</normaloff>../res/arrow.png</iconset>
+   </property>
+   <property name="text">
+    <string>Arrow</string>
+   </property>
+  </action>
+  <action name="Text">
+   <property name="text">
+    <string>Text</string>
+   </property>
+  </action>
+  <action name="Hide_area">
+   <property name="text">
+    <string>Hide area</string>
+   </property>
+  </action>
+  <action name="Edit">
+   <property name="text">
+    <string>Edit</string>
+   </property>
+  </action>
+  <action name="INFO">
+   <property name="text">
+    <string>INFO</string>
+   </property>
+  </action>
+  <action name="Show_Measurement_and_Anotations">
+   <property name="text">
+    <string>Show Measurement and Anotations</string>
+   </property>
+  </action>
+  <action name="actionMeasure_and_Annotation_Option">
+   <property name="text">
+    <string>Measure and Annotation Option</string>
+   </property>
+  </action>
+  <action name="actionAbou_Us">
+   <property name="text">
+    <string>About Us</string>
+   </property>
+  </action>
+  <action name="actionSupport_Us">
+   <property name="text">
+    <string>Support Us</string>
+   </property>
+  </action>
+  <action name="actionOptions">
+   <property name="text">
+    <string>Options</string>
+   </property>
+   <property name="font">
+    <font>
+     <family>微软雅黑</family>
+    </font>
+   </property>
+  </action>
+  <action name="actionCustomize">
+   <property name="text">
+    <string>Customize</string>
+   </property>
+  </action>
+  <action name="actionTag_Dictionary">
+   <property name="text">
+    <string>Tag Dictionary</string>
+   </property>
+  </action>
+  <action name="actionTag_Manager">
+   <property name="text">
+    <string>Tag Manager</string>
+   </property>
+  </action>
+  <action name="actionHelp">
+   <property name="icon">
+    <iconset>
+     <normaloff>../res/question.png</normaloff>../res/question.png</iconset>
+   </property>
+   <property name="text">
+    <string>Help</string>
+   </property>
+   <property name="toolTip">
+    <string>How to USE</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
