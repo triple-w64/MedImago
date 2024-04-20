@@ -1,7 +1,7 @@
 import sys,re, os
 from PyQt5.QtWidgets import QApplication, QWidget
 from Ui_tagsys import Ui_MainWindow
-from PyQt5.QtWidgets import QPushButton, QMainWindow, QAction
+from PyQt5.QtWidgets import QPushButton, QMainWindow, QLabel, QAction
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 # FileSystemModel
@@ -21,6 +21,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.setupMenubar()
         self.setMyCpu()
         self.setupFileFieldUi()
+        self.setupStatusBarUi()
 
     def setupMenubar(self):
         action_hello = QAction('Print Hello World', self)
@@ -33,7 +34,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.model = QStandardItemModel()
         self.tree_view.setModel(self.model)
         self.tree_view.setHeaderHidden(1)
-        self.tree_view.doubleClicked.connect(self.tv_on_double_click)
+        self.tree_view.clicked.connect(self.tv_on_click)
         self.file_model = QFileSystemModel()
         self.fm = self.file_model
         # # 连接 directoryLoaded 信号到槽函数 on_directory_loaded
@@ -72,6 +73,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.tabWidget_2.addTab(self.tree_view2, "经典列表")
         self.pushButton.clicked.connect(self.retHigherLvDir)
         self.tree_view2.doubleClicked.connect(self.tv2_on_double_click)
+        self.setRoot(self.fm.index(self.fm.myComputer()))
         
     def setRoot(self, index):
         if isinstance(index, QModelIndex):
@@ -86,7 +88,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             # up_button
             self.pushButton.setEnabled(parent_index != index)
             self.tree_view2.collapseAll()
-        
+            curdir = self.status_bar.findChild(QLabel, "curdir")
+            if curdir:
+                self.status_bar.findChild(QLabel, "curdir").setText(self.fm.filePath(index))
     
     def retHigherLvDir(self):
         # 获取当前的索引
@@ -96,7 +100,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         # 设置新的根路径
         self.setRoot(parent_index)
     
-    def tv_on_double_click(self, index):
+    def tv_on_click(self, index):
         # 获取被双击的项目
         item = self.model.itemFromIndex(index)
         # print(item.path)
@@ -121,7 +125,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         
     def tv2_on_double_click(self, index):
         self.setRoot(index)
-        
     
     def get_drives(self):
         return [f"{drive}:\\\\" for drive in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' if os.path.exists(f"{drive}:")]
@@ -136,9 +139,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             # print(type(icon))
         parent.appendRow(item)
     
-    def print_hello(self):
-        print(self.fm.index(""))
-        pass
+    def debug(self):
+        cmd = self.lineEdit.text()
+        exec(cmd)
     # def on_directory_loaded(self, path):
     #     index = self.fm.index(path)
     #     print(f"Directory loaded: {path}")
@@ -147,17 +150,24 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     #     # 在这里执行加载目录后的操作
     #     # 例如，你可以展开节点、更新状态栏或执行其他任务
         
-        
     def create_tree_view(self):
         # 创建一个新的 QTreeView 实例并设置模型等
         tree_view = QTreeView()
-        self.fm.setRootPath('C://')
+        self.fm.setRootPath('')
         tree_view.setModel(self.fm)
         return tree_view
     
+    def setupStatusBarUi(self):
+        # 创建并设置 QLabel 显示当前文件夹
+        folder_label = QLabel("")
+        folder_label.setObjectName("curdir")
+        folder_label.setStyleSheet("margin-right: 10px;")  # 右侧间隔10px
+        self.status_bar.addWidget(folder_label)
 
-        
-        
+        # 创建并设置 QLabel 显示当前版本信息
+        version_label = QLabel("版本 0.0.0")
+        version_label.setStyleSheet("margin-left: 10px;")  # 右侧间隔10px
+        self.status_bar.addPermanentWidget(version_label)  # 添加到状态栏的最右侧
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
