@@ -1,8 +1,18 @@
 import os
 from pathlib import Path
+import win32api, win32con
+
 
 def isfile(path:str):
     return os.path.isfile(path)
+
+def is_hidden(filepath):
+    try:
+        attrs = win32api.GetFileAttributes(filepath)
+        return bool(attrs & win32con.FILE_ATTRIBUTE_HIDDEN)
+    except Exception as e:
+        # print(f"Error: {filepath} {e}")
+        return False
 
 def listdir(path:str, type:int = 0):
     # os.listdir
@@ -25,6 +35,11 @@ def listdir(path:str, type:int = 0):
         import glob
         dirconts = glob.glob(os.path.join(path, '*'))
     # print(dirconts[:3])
+    
+    excludelist = [".dll"]
+    for exclusion in excludelist:
+        dirconts = [path for path in dirconts if not path.endswith(exclusion)]
+    dirconts = [path for path in dirconts if not is_hidden(path)]
     
     return dirconts
     

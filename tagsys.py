@@ -25,7 +25,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
     def setupMenubar(self):
         action_hello = QAction('Print Hello World', self)
-        action_hello.triggered.connect(self.print_hello)
+        action_hello.triggered.connect(self.debugWline)
         self.menu_4.addAction(action_hello)
     
     def setMyCpu(self):
@@ -139,7 +139,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             # print(type(icon))
         parent.appendRow(item)
     
-    def debug(self):
+    def debugWline(self):
         cmd = self.lineEdit.text()
         exec(cmd)
     # def on_directory_loaded(self, path):
@@ -165,7 +165,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.status_bar.addWidget(folder_label)
 
         # 创建并设置 QLabel 显示当前版本信息
-        version_label = QLabel("版本 0.0.0")
+        version_label = QLabel("版本 0.0.1")
         version_label.setStyleSheet("margin-left: 10px;")  # 右侧间隔10px
         self.status_bar.addPermanentWidget(version_label)  # 添加到状态栏的最右侧
 
