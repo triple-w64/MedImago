@@ -6,6 +6,17 @@ import win32api, win32con
 def isfile(path:str):
     return os.path.isfile(path)
 
+def basename(path:str):
+    return os.path.basename(path)
+
+def isdir(path:str):
+    return os.path.isdir(path)
+
+def isempty(path:str):
+    if isdir(path):
+        return listdir(path)==[]
+    return True
+
 def is_hidden(filepath):
     try:
         attrs = win32api.GetFileAttributes(filepath)
@@ -15,6 +26,7 @@ def is_hidden(filepath):
         return False
 
 def listdir(path:str, type:int = 0):
+    '''return absolute path'''
     # os.listdir
     if type==0:
         childrenRelpath = os.listdir(path)

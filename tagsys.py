@@ -24,9 +24,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.setupStatusBarUi()
 
     def setupMenubar(self):
-        action_hello = QAction('Print Hello World', self)
-        action_hello.triggered.connect(self.debugWline)
-        self.menu_4.addAction(action_hello)
+        action_debug = QAction('debug', self)
+        action_debug.triggered.connect(self.debugWline)
+        self.menu_4.addAction(action_debug)
     
     def setMyCpu(self):
         self.tabWidget.clear()
@@ -35,6 +35,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.tree_view.setModel(self.model)
         self.tree_view.setHeaderHidden(1)
         self.tree_view.clicked.connect(self.tv_on_click)
+        self.tree_view.expanded.connect(self.on_node_expanded)
         self.file_model = QFileSystemModel()
         self.fm = self.file_model
         # # 连接 directoryLoaded 信号到槽函数 on_directory_loaded
@@ -44,6 +45,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         root_icon = self.fm.myComputer(1)
         self.root_item = QStandardItem(root_icon, '此电脑')  # 根项目没有名称
         self.root_item.setEditable(0)
+        self.root_item.isloaded = True
         self.model.appendRow(self.root_item)
         # 添加自定义节点
         rootfolderlist = ["3D Objects", "Videos", "Pictures", "Documents", "Downloads", "Music", "Desktop"]
@@ -54,14 +56,16 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             fmindex = self.fm.index(itempath)
             obj = self.fm.myComputer(5)
             icon = self.fm.fileIcon(fmindex)
-            self.add_custom_node(self.root_item, rootfoldernames[i], itempath, icon)
+            childitem = self.add_custom_node(self.root_item, rootfoldernames[i], itempath, icon)
+            if not op.isempty(itempath): self.add_custom_node(childitem, rootfoldernames[i], itempath, icon)
             # self.add_custom_node(self.model.invisibleRootItem(), rootfoldernames[i], icon)
 
         # 添加盘符
         for drive in self.get_drives():
             # print(drive)
             driveindex = self.fm.index(drive)
-            self.add_custom_node(self.root_item, self.fm.fileName(driveindex), drive, self.fm.fileIcon(self.fm.index(drive)))
+            childitem = self.add_custom_node(self.root_item, self.fm.fileName(driveindex), drive, self.fm.fileIcon(self.fm.index(drive)))
+            if not op.isempty(drive): self.add_custom_node(childitem, rootfoldernames[i], itempath, icon)
         self.tree_view.expand(self.model.indexFromItem(self.root_item))
         self.tabWidget.addTab(self.tree_view, "My computer")
     
@@ -99,29 +103,33 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         parent_index = self.fm.parent(current_index)
         # 设置新的根路径
         self.setRoot(parent_index)
-    
-    def tv_on_click(self, index):
-        # 获取被双击的项目
+        
+    def on_node_expanded(self, index):
+        '''
+        当节点被展开时，遍历其子节点，给其子节点加上子节点，并标记isloaded
+        '''
         item = self.model.itemFromIndex(index)
-        # print(item.path)
-        if op.isfile(item.path):
+        if item.isloaded:
             return
-
-        # set list tree view root index
-        # self.on_directory_loaded(item.path)
-        self.setRoot(self.fm.index(item.path))
-
-        if item.ismounted:
+        if not item.hasChildren():
             return
-        # add children node
+        item.removeRow(0)
+
         childrenAbsPath = op.listdir(item.path)
         for childAbsPath in childrenAbsPath:
             childindex = self.fm.index(childAbsPath)
-            self.add_custom_node(item, self.fm.fileName(childindex),childAbsPath,self.fm.fileIcon(childindex))
+            childitem = self.add_custom_node(item, op.basename(childAbsPath),childAbsPath,self.fm.fileIcon(childindex))
+            print("childAbsPath", childAbsPath)
+            if not op.isempty(childAbsPath): self.add_custom_node(childitem, self.fm.fileName(childindex),childAbsPath,self.fm.fileIcon(childindex))
             # print(self.fm.fileName(childindex))
         # if item.data(Qt.UserRole) == 'Hello World':
         #     print('Hello World')
-        item.ismounted = True
+        item.isloaded = True
+    
+    def tv_on_click(self, index):
+        # 获取被单击的项目
+        item = self.model.itemFromIndex(index)
+        self.setRoot(self.fm.index(item.path))
         
     def tv2_on_double_click(self, index):
         self.setRoot(index)
@@ -132,16 +140,20 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     def add_custom_node(self, parent, name, itempath, icon=None):
         item = QStandardItem(name)
         item.path = itempath
-        item.ismounted = False
+        item.isloaded = False
         item.setEditable(False)
         if icon:
             item.setIcon(icon)
             # print(type(icon))
         parent.appendRow(item)
+        return item
     
     def debugWline(self):
         cmd = self.lineEdit.text()
-        exec(cmd)
+        try:
+            exec(cmd)
+        except Exception as e:
+            print(e)
     # def on_directory_loaded(self, path):
     #     index = self.fm.index(path)
     #     print(f"Directory loaded: {path}")
@@ -165,7 +177,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.status_bar.addWidget(folder_label)
 
         # 创建并设置 QLabel 显示当前版本信息
-        version_label = QLabel("版本 0.0.1")
+        version_label = QLabel("版本 0.0.2")
         version_label.setStyleSheet("margin-left: 10px;")  # 右侧间隔10px
         self.status_bar.addPermanentWidget(version_label)  # 添加到状态栏的最右侧
 
