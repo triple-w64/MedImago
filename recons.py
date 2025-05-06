@@ -474,31 +474,30 @@ class VTKReconstructionTab(QWidget):
         self.view_tabs = QTabWidget()
         self.view_tabs.setVisible(False)  # 初始隐藏标签页
         
-        # 创建三个标准平面的显示窗口
-        self.axial_widget = QVTKRenderWindowInteractor()
-        self.coronal_widget = QVTKRenderWindowInteractor()
-        self.sagittal_widget = QVTKRenderWindowInteractor()
-        
-        # 为每个标准平面创建渲染器和渲染窗口
+        # 创建三个标准平面的显示窗口 - 使用延迟初始化策略
+        self.axial_widget = None
+        self.coronal_widget = None 
+        self.sagittal_widget = None
+
+        # 为每个标准平面创建渲染器
         self.axial_renderer = vtk.vtkRenderer()
         self.axial_renderer.SetBackground(0.2, 0.2, 0.2)
-        axial_window = self.axial_widget.GetRenderWindow()
-        axial_window.AddRenderer(self.axial_renderer)
-        
+
         self.coronal_renderer = vtk.vtkRenderer()
         self.coronal_renderer.SetBackground(0.2, 0.2, 0.2)
-        coronal_window = self.coronal_widget.GetRenderWindow()
-        coronal_window.AddRenderer(self.coronal_renderer)
-        
+
         self.sagittal_renderer = vtk.vtkRenderer()
         self.sagittal_renderer.SetBackground(0.2, 0.2, 0.2)
-        sagittal_window = self.sagittal_widget.GetRenderWindow()
-        sagittal_window.AddRenderer(self.sagittal_renderer)
-        
+
+        # 添加占位符标签页 - 实际渲染窗口将在需要时创建
+        axial_placeholder = QWidget()
+        coronal_placeholder = QWidget() 
+        sagittal_placeholder = QWidget()
+
         # 添加到标签页
-        self.view_tabs.addTab(self.axial_widget, "Axial (XY)")
-        self.view_tabs.addTab(self.coronal_widget, "Coronal (XZ)")
-        self.view_tabs.addTab(self.sagittal_widget, "Sagittal (YZ)")
+        self.view_tabs.addTab(axial_placeholder, "Axial (XY)")
+        self.view_tabs.addTab(coronal_placeholder, "Coronal (XZ)")
+        self.view_tabs.addTab(sagittal_placeholder, "Sagittal (YZ)")
         
         # 缓存预设的传输函数以提高性能
         self._cached_transfer_functions = {}
@@ -564,14 +563,19 @@ class VTKReconstructionTab(QWidget):
         self.mpr_reslice = None
         self.multiview_enabled = False
         self.mpr_widgets = {
-            "Axial (XY)": self.axial_widget,
-            "Coronal (XZ)": self.coronal_widget,
-            "Sagittal (YZ)": self.sagittal_widget
+            "Axial (XY)": None,
+            "Coronal (XZ)": None,
+            "Sagittal (YZ)": None
         }
         self.mpr_renderers = {
             "Axial (XY)": self.axial_renderer,
             "Coronal (XZ)": self.coronal_renderer,
             "Sagittal (YZ)": self.sagittal_renderer
+        }
+        self.mpr_placeholder_widgets = {
+            "Axial (XY)": axial_placeholder,
+            "Coronal (XZ)": coronal_placeholder,
+            "Sagittal (YZ)": sagittal_placeholder
         }
 
     def create_fps_display(self):
@@ -766,7 +770,8 @@ class VTKReconstructionTab(QWidget):
         # 如果是多视图模式，更新所有视图
         if self.multiview_enabled:
             for widget in self.mpr_widgets.values():
-                if widget.GetRenderWindow():
+                if widget and widget.GetRenderWindow():
+                    # 确保渲染器处于选择状态
                     widget.GetRenderWindow().Render()
     
     def toggle_multiview(self, state):
@@ -779,15 +784,49 @@ class VTKReconstructionTab(QWidget):
         
         # 如果启用多视图且已加载数据，设置三个平面
         if self.multiview_enabled and self.reader is not None:
+            # 延迟到第一次需要时才创建渲染窗口
             self.setup_multiview_mpr()
         else:
             # 确保主视图显示当前选择的平面
             self.setup_mpr()
     
+    def init_mpr_view(self, view_name):
+        """延迟初始化MPR视图窗口"""
+        if self.mpr_widgets[view_name] is not None:
+            return  # 已经初始化过了
+        
+        # 创建新的渲染窗口
+        widget = QVTKRenderWindowInteractor()
+        
+        # 设置渲染器
+        render_window = widget.GetRenderWindow()
+        render_window.AddRenderer(self.mpr_renderers[view_name])
+        
+        # 设置交互器样式
+        interactor_style = vtk.vtkInteractorStyleImage()
+        widget.SetInteractorStyle(interactor_style)
+        
+        # 存储窗口并替换标签页中的占位符
+        self.mpr_widgets[view_name] = widget
+        
+        # 找到对应标签页的索引并替换占位符
+        placeholder = self.mpr_placeholder_widgets[view_name]
+        index = self.view_tabs.indexOf(placeholder)
+        if index >= 0:
+            # 移除旧占位符
+            self.view_tabs.removeTab(index)
+            # 添加新的渲染窗口
+            self.view_tabs.insertTab(index, widget, view_name)
+            self.view_tabs.setCurrentIndex(index)
+
     def setup_multiview_mpr(self):
         """设置三平面MPR视图"""
         if self.reader is None:
             return
+        
+        # 初始化所有视图窗口
+        for view_name in self.mpr_renderers.keys():
+            self.init_mpr_view(view_name)
             
         # 为每个平面创建MPR重建
         self.setup_axial_mpr()
@@ -796,10 +835,20 @@ class VTKReconstructionTab(QWidget):
         
         # 渲染所有视图
         for widget in self.mpr_widgets.values():
-            widget.GetRenderWindow().Render()
-    
+            if widget and widget.GetRenderWindow():
+                # 确保窗口已经初始化
+                if not widget.GetRenderWindow().GetNeverRendered():
+                    widget.GetRenderWindow().Render()
+
     def setup_axial_mpr(self):
         """设置轴向MPR视图"""
+        # 确保视图已初始化
+        view_name = "Axial (XY)"
+        self.init_mpr_view(view_name)
+        
+        renderer = self.mpr_renderers[view_name]
+        renderer.RemoveAllViewProps()
+        
         # 创建轴向(XY)平面的重切片器
         axial_reslice = vtk.vtkImageReslice()
         axial_reslice.SetInputConnection(self.reader.GetOutputPort())
@@ -835,12 +884,23 @@ class VTKReconstructionTab(QWidget):
         axial_actor.GetMapper().SetInputConnection(axial_mapper.GetOutputPort())
         
         # 添加到渲染器
-        self.axial_renderer.RemoveAllViewProps()
-        self.axial_renderer.AddActor(axial_actor)
-        self.axial_renderer.ResetCamera()
-    
+        renderer.AddActor(axial_actor)
+        renderer.ResetCamera()
+        
+        # 安全地渲染
+        widget = self.mpr_widgets[view_name]
+        if widget and widget.GetRenderWindow():
+            widget.GetRenderWindow().Render()
+
     def setup_coronal_mpr(self):
         """设置冠状位MPR视图"""
+        # 确保视图已初始化
+        view_name = "Coronal (XZ)"
+        self.init_mpr_view(view_name)
+        
+        renderer = self.mpr_renderers[view_name]
+        renderer.RemoveAllViewProps()
+        
         # 创建冠状位(XZ)平面的重切片器
         coronal_reslice = vtk.vtkImageReslice()
         coronal_reslice.SetInputConnection(self.reader.GetOutputPort())
@@ -877,12 +937,23 @@ class VTKReconstructionTab(QWidget):
         coronal_actor.GetMapper().SetInputConnection(coronal_mapper.GetOutputPort())
         
         # 添加到渲染器
-        self.coronal_renderer.RemoveAllViewProps()
-        self.coronal_renderer.AddActor(coronal_actor)
-        self.coronal_renderer.ResetCamera()
-    
+        renderer.AddActor(coronal_actor)
+        renderer.ResetCamera()
+        
+        # 安全地渲染
+        widget = self.mpr_widgets[view_name]
+        if widget and widget.GetRenderWindow():
+            widget.GetRenderWindow().Render()
+
     def setup_sagittal_mpr(self):
         """设置矢状位MPR视图"""
+        # 确保视图已初始化
+        view_name = "Sagittal (YZ)"
+        self.init_mpr_view(view_name)
+        
+        renderer = self.mpr_renderers[view_name]
+        renderer.RemoveAllViewProps()
+        
         # 创建矢状位(YZ)平面的重切片器
         sagittal_reslice = vtk.vtkImageReslice()
         sagittal_reslice.SetInputConnection(self.reader.GetOutputPort())
@@ -919,10 +990,14 @@ class VTKReconstructionTab(QWidget):
         sagittal_actor.GetMapper().SetInputConnection(sagittal_mapper.GetOutputPort())
         
         # 添加到渲染器
-        self.sagittal_renderer.RemoveAllViewProps()
-        self.sagittal_renderer.AddActor(sagittal_actor)
-        self.sagittal_renderer.ResetCamera()
-    
+        renderer.AddActor(sagittal_actor)
+        renderer.ResetCamera()
+        
+        # 安全地渲染
+        widget = self.mpr_widgets[view_name]
+        if widget and widget.GetRenderWindow():
+            widget.GetRenderWindow().Render()
+
     def setup_mpr(self):
         """设置单一MPR视图"""
         if self.reader is None:

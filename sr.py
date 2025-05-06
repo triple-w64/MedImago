@@ -5,10 +5,11 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QLabel, QPushButton, QFileDialog, QFrame, QSplitter, 
     QVBoxLayout, QHBoxLayout, QWidget, QComboBox, QSpinBox,
-    QTreeWidget, QTreeWidgetItem, QGroupBox, QProgressBar
+    QTreeWidget, QTreeWidgetItem, QGroupBox, QProgressBar,
+    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QScrollArea
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QImage, QPixmap, QFont
+from PyQt5.QtCore import Qt, QTimer, QRectF
+from PyQt5.QtGui import QImage, QPixmap, QFont, QWheelEvent, QCursor, QPainter, QBrush, QColor
 
 
 # 超分辨率模块
@@ -274,9 +275,28 @@ class SuperResolutionTab(QWidget):
         label.setPixmap(pixmap)
 
     def display_image(self, label, image):
-        """显示图像到标签"""
+        """显示图像到标签或图像查看器"""
         if image is not None:
-            self._display_image_in_label(image, label)
+            if label == self.original_image_label:
+                # 使用图像查看器显示图像
+                h, w = image.shape[:2]
+                if len(image.shape) == 2:  # 灰度图像
+                    q_image = QImage(image.data, w, h, w, QImage.Format_Grayscale8)
+                else:  # 彩色图像
+                    if image.shape[2] == 4:  # RGBA图像
+                        image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+                    else:  # BGR图像
+                        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    
+                    h, w, ch = image.shape
+                    bytes_per_line = ch * w
+                    q_image = QImage(image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                
+                pixmap = QPixmap.fromImage(q_image)
+                self.image_viewer.set_image(pixmap)
+            else:
+                # 普通标签显示图像
+                self._display_image_in_label(image, label)
 
     def create_sr_controls(self):
         """创建超分辨率控制区域"""
@@ -287,17 +307,18 @@ class SuperResolutionTab(QWidget):
         self.image_display_group = QGroupBox("Image Display")
         self.image_display_layout = QVBoxLayout()  # 改为垂直布局
 
-        # 原始图像（同时也用于显示重建结果）
-        self.original_image_label = QLabel("Original/Reconstructed Image")
-        self.original_image_label.setAlignment(Qt.AlignCenter)
+        # 创建自定义的可缩放图像查看器
+        self.image_viewer = ZoomableImageViewer()
+        
+        # 保留一个隐藏的标签用于兼容其他代码中对original_image_label的引用
+        self.original_image_label = QLabel()
+        self.original_image_label.setVisible(False)
 
         # 添加到布局
+        self.image_display_layout.addWidget(self.image_viewer)
         self.image_display_layout.addWidget(self.original_image_label)
         
         self.image_display_group.setLayout(self.image_display_layout)
-        
-        font1 = QFont("Microsoft YaHei", 10)
-        self.original_image_label.setFont(font1)
         
         # 控制组
         self.controls_group = QGroupBox("SR Controls")
@@ -518,10 +539,11 @@ class SuperResolutionTab(QWidget):
         end_time = time.time()
         if sr_image is not None:
             self.sr_result = sr_image  # 存储超分辨率结果
-            # 在原始图像标签上显示重建结果
+            # 显示重建结果和图像尺寸
+            h, w = sr_image.shape[:2]
             self.display_image(self.original_image_label, sr_image)
             elapsed_time = end_time - start_time
-            self.status_bar.showMessage(f"Processing completed in {elapsed_time:.4f} seconds")
+            self.status_bar.showMessage(f"Processing completed in {elapsed_time:.4f} seconds - Image size: {w}x{h}")
             self.save_button.setEnabled(True)  # 启用保存按钮
         else:
             self.status_bar.showMessage("Super-resolution failed!")
@@ -624,3 +646,120 @@ class SuperResolutionTab(QWidget):
         if os.path.isdir(dir_path):
             # 加载目录内容
             self._add_directory_contents(item, dir_path) 
+
+# 添加自定义图像查看器类
+class ZoomableImageViewer(QGraphicsView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setScene(QGraphicsScene())
+        self.pixmap_item = None
+        self.setRenderHint(QPainter.Antialiasing)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setBackgroundBrush(QBrush(QColor(240, 240, 240)))
+        self.setFrameShape(QFrame.NoFrame)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)  # 允许拖动
+        
+        # 添加缩放级别跟踪
+        self.zoom_level = 1.0
+        self.min_zoom = 0.1
+        self.max_zoom = 10.0
+        
+        # 控制是否自动适应视图
+        self.should_fit_in_view = True
+        
+        # 调试信息
+        print("ZoomableImageViewer initialized")
+
+    def wheelEvent(self, event):
+        """处理鼠标滚轮事件实现缩放"""
+        # 获取滚轮事件信息
+        delta = event.angleDelta().y()
+        
+        # 直接打印滚轮值以便调试
+        print(f"Mouse wheel delta: {delta}")
+        
+        # 一旦用户开始缩放，就禁用自动适应视图
+        self.should_fit_in_view = False
+        
+        # 设置缩放因子和方向
+        factor = 1.15  # 稍微增加缩放因子，使缩放更明显
+        
+        # 确保缩放方向直观：向上滚动放大，向下滚动缩小
+        if delta > 0:  # 向上滚动
+            # 放大
+            new_zoom = self.zoom_level * factor
+            print(f"Zooming in: {self.zoom_level} -> {new_zoom}")
+        else:  # 向下滚动
+            # 缩小
+            new_zoom = self.zoom_level / factor
+            print(f"Zooming out: {self.zoom_level} -> {new_zoom}")
+        
+        # 应用缩放限制
+        if new_zoom < self.min_zoom:
+            new_zoom = self.min_zoom
+            print(f"Reached minimum zoom: {self.min_zoom}")
+        elif new_zoom > self.max_zoom:
+            new_zoom = self.max_zoom
+            print(f"Reached maximum zoom: {self.max_zoom}")
+        
+        # 计算实际缩放因子
+        actual_factor = new_zoom / self.zoom_level
+        
+        # 应用缩放，确保缩放量有效
+        if abs(actual_factor - 1.0) > 0.001:
+            self.scale(actual_factor, actual_factor)
+            self.zoom_level = new_zoom
+            print(f"Applied zoom: {self.zoom_level}")
+        
+        # 阻止事件传递，避免滚动条同时响应
+        event.accept()
+
+    def set_image(self, pixmap):
+        """设置要显示的图像"""
+        self.scene().clear()
+        self.pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.scene().addItem(self.pixmap_item)
+        self.setSceneRect(QRectF(pixmap.rect()))
+        
+        # 重置缩放状态
+        self.zoom_level = 1.0
+        self.should_fit_in_view = True
+        
+        # 仅在初始设置图像时适应视图
+        self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+        print(f"Set new image, initial fit to view, zoom: {self.zoom_level}")
+
+    def fit_in_view(self):
+        """调整图像以适应视图大小 (仅在需要时调用)"""
+        if self.pixmap_item and self.should_fit_in_view:
+            self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+            self.zoom_level = 1.0
+            print("Fit image to view, zoom reset to 1.0")
+
+    def resizeEvent(self, event):
+        """窗口大小改变时的处理"""
+        super().resizeEvent(event)
+        
+        # 只有在初始状态或明确请求时才适应视图
+        if self.pixmap_item and self.should_fit_in_view:
+            self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+            print("Window resized, adjusted view to fit")
+        else:
+            print("Window resized, maintaining current zoom level")
+            
+    def mousePressEvent(self, event):
+        """处理鼠标按下事件"""
+        if event.button() == Qt.MiddleButton:
+            # 中键点击重置缩放
+            if self.pixmap_item:
+                self.should_fit_in_view = True
+                self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+                self.zoom_level = 1.0
+                print("Middle mouse button - reset to fit view")
+                event.accept()
+                return
+                
+        super().mousePressEvent(event) 
