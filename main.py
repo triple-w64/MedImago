@@ -65,7 +65,7 @@ class MainApp(QMainWindow):
         self.load_style()
         
         # 设置应用图标
-        icon_path = "Platform/resource/imris.ico"
+        icon_path = "resource/imris.ico"
         if os.path.exists(icon_path):
             app_icon = QIcon(icon_path)
             self.setWindowIcon(app_icon)
@@ -111,7 +111,7 @@ class MainApp(QMainWindow):
     def load_style(self):
         """加载样式表"""
         try:
-            style_path = "Platform/resource/style.qss"
+            style_path = "resource/style.qss"
             if os.path.exists(style_path):
                 with open(style_path, "r") as f:
                     style = f.read()

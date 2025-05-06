@@ -25,7 +25,7 @@ class MedSAMTab(QWidget):
 
         # 配置MedSAM
         self.SAM_MODEL_TYPE = "vit_b"
-        self.MedSAM_CKPT_PATH = "Platform\MedSAM\work_dir\MedSAM\medsam_vit_b.pth"
+        self.MedSAM_CKPT_PATH = "MedSAM\work_dir\MedSAM\medsam_vit_b.pth"
         self.MEDSAM_IMG_INPUT_SIZE = 1024
 
         # 图形界面参数
