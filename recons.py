@@ -4,7 +4,7 @@ import time  # 添加time模块用于FPS计算
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QWidget, QPushButton, 
     QGroupBox, QComboBox, QFileDialog, QSplitter, QLineEdit, QLabel, QSlider,
-    QColorDialog, QFormLayout, QSpinBox, QStyle, QStyleOptionSlider
+    QColorDialog, QFormLayout, QSpinBox, QStyle, QStyleOptionSlider, QTabWidget, QCheckBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QIcon, QColor
@@ -70,7 +70,7 @@ class VTKReconstructionTab(QWidget):
         # 渲染方法选择
         render_method_layout = QFormLayout()
         self.render_combo = QComboBox()
-        self.render_combo.addItems(["Volume Rendering", "Surface Rendering"])
+        self.render_combo.addItems(["Volume Rendering", "Surface Rendering", "MPR (Multi-Planar Reconstruction)"])
         self.render_combo.currentIndexChanged.connect(self.update_parameter_visibility)
         render_method_layout.addRow("Rendering Method:", self.render_combo)
         self.controls_group_layout.addLayout(render_method_layout)
@@ -299,9 +299,145 @@ class VTKReconstructionTab(QWidget):
         # 添加相机设置组
         self.controls_group_layout.addWidget(self.camera_group)
         
-        # 默认情况下显示体绘制参数
-        self.update_parameter_visibility(0)
-
+        # 添加MPR参数组
+        self.mpr_params_group = QGroupBox("MPR Parameters")
+        mpr_params_layout = QFormLayout()
+        self.mpr_params_group.setLayout(mpr_params_layout)
+        
+        # MPR平面选择
+        self.mpr_plane_combo = QComboBox()
+        self.mpr_plane_combo.addItems(["Axial (XY)", "Coronal (XZ)", "Sagittal (YZ)", "Oblique"])
+        self.mpr_plane_combo.currentIndexChanged.connect(self.update_mpr_plane)
+        mpr_params_layout.addRow("Plane:", self.mpr_plane_combo)
+        
+        # 平面位置滑块
+        position_container = QWidget()
+        position_layout = QHBoxLayout(position_container)
+        position_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.mpr_position_slider = QSlider(Qt.Horizontal)
+        self.mpr_position_slider.setRange(0, 100)
+        self.mpr_position_slider.setValue(50)
+        self.mpr_position_slider.valueChanged.connect(self.update_mpr_position)
+        
+        self.mpr_position_value = QLabel("50%")
+        self.mpr_position_slider.valueChanged.connect(lambda v: self.mpr_position_value.setText(f"{v}%"))
+        
+        position_layout.addWidget(self.mpr_position_slider, 4)
+        position_layout.addWidget(self.mpr_position_value, 1)
+        
+        mpr_params_layout.addRow("Position:", position_container)
+        
+        # 平面旋转控件(仅用于Oblique模式)
+        self.oblique_controls = QWidget()
+        oblique_layout = QFormLayout(self.oblique_controls)
+        
+        # X轴旋转
+        x_rotation_container = QWidget()
+        x_rotation_layout = QHBoxLayout(x_rotation_container)
+        x_rotation_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.x_rotation_slider = QSlider(Qt.Horizontal)
+        self.x_rotation_slider.setRange(0, 360)
+        self.x_rotation_slider.setValue(0)
+        self.x_rotation_slider.valueChanged.connect(self.update_oblique_plane)
+        
+        self.x_rotation_value = QLabel("0°")
+        self.x_rotation_slider.valueChanged.connect(lambda v: self.x_rotation_value.setText(f"{v}°"))
+        
+        x_rotation_layout.addWidget(self.x_rotation_slider, 4)
+        x_rotation_layout.addWidget(self.x_rotation_value, 1)
+        
+        oblique_layout.addRow("X Rotation:", x_rotation_container)
+        
+        # Y轴旋转
+        y_rotation_container = QWidget()
+        y_rotation_layout = QHBoxLayout(y_rotation_container)
+        y_rotation_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.y_rotation_slider = QSlider(Qt.Horizontal)
+        self.y_rotation_slider.setRange(0, 360)
+        self.y_rotation_slider.setValue(0)
+        self.y_rotation_slider.valueChanged.connect(self.update_oblique_plane)
+        
+        self.y_rotation_value = QLabel("0°")
+        self.y_rotation_slider.valueChanged.connect(lambda v: self.y_rotation_value.setText(f"{v}°"))
+        
+        y_rotation_layout.addWidget(self.y_rotation_slider, 4)
+        y_rotation_layout.addWidget(self.y_rotation_value, 1)
+        
+        oblique_layout.addRow("Y Rotation:", y_rotation_container)
+        
+        # Z轴旋转
+        z_rotation_container = QWidget()
+        z_rotation_layout = QHBoxLayout(z_rotation_container)
+        z_rotation_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.z_rotation_slider = QSlider(Qt.Horizontal)
+        self.z_rotation_slider.setRange(0, 360)
+        self.z_rotation_slider.setValue(0)
+        self.z_rotation_slider.valueChanged.connect(self.update_oblique_plane)
+        
+        self.z_rotation_value = QLabel("0°")
+        self.z_rotation_slider.valueChanged.connect(lambda v: self.z_rotation_value.setText(f"{v}°"))
+        
+        z_rotation_layout.addWidget(self.z_rotation_slider, 4)
+        z_rotation_layout.addWidget(self.z_rotation_value, 1)
+        
+        oblique_layout.addRow("Z Rotation:", z_rotation_container)
+        
+        # 初始时隐藏斜截面控件
+        self.oblique_controls.setVisible(False)
+        mpr_params_layout.addRow("", self.oblique_controls)
+        
+        # 窗宽窗位调整
+        ww_container = QWidget()
+        ww_layout = QHBoxLayout(ww_container)
+        ww_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.window_width_slider = QSlider(Qt.Horizontal)
+        self.window_width_slider.setRange(1, 4000)
+        self.window_width_slider.setValue(400)
+        self.window_width_slider.valueChanged.connect(self.update_window_level)
+        
+        self.window_width_value = QLabel("400")
+        self.window_width_slider.valueChanged.connect(lambda v: self.window_width_value.setText(str(v)))
+        
+        ww_layout.addWidget(self.window_width_slider, 4)
+        ww_layout.addWidget(self.window_width_value, 1)
+        
+        mpr_params_layout.addRow("Window Width:", ww_container)
+        
+        # 窗位调整
+        wl_container = QWidget()
+        wl_layout = QHBoxLayout(wl_container)
+        wl_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.window_level_slider = QSlider(Qt.Horizontal)
+        self.window_level_slider.setRange(-1000, 3000)
+        self.window_level_slider.setValue(40)
+        self.window_level_slider.valueChanged.connect(self.update_window_level)
+        
+        self.window_level_value = QLabel("40")
+        self.window_level_slider.valueChanged.connect(lambda v: self.window_level_value.setText(str(v)))
+        
+        wl_layout.addWidget(self.window_level_slider, 4)
+        wl_layout.addWidget(self.window_level_value, 1)
+        
+        mpr_params_layout.addRow("Window Level:", wl_container)
+        
+        # 多平面视图开关
+        self.enable_multiview = QCheckBox("Enable Three-Plane View")
+        self.enable_multiview.setChecked(False)
+        self.enable_multiview.stateChanged.connect(self.toggle_multiview)
+        mpr_params_layout.addRow("", self.enable_multiview)
+        
+        # 添加MPR参数组到控制布局
+        self.controls_group_layout.addWidget(self.mpr_params_group)
+        
+        # 默认隐藏MPR参数
+        self.mpr_params_group.setVisible(False)
+        
         self.start_button = QPushButton("Start Reconstruction")
         self.start_button.clicked.connect(self.start_reconstruction)
         self.start_button.setEnabled(False)  # 初始禁用，直到数据加载完成
@@ -334,6 +470,36 @@ class VTKReconstructionTab(QWidget):
         self.display_container = QWidget()
         self.display_layout = QVBoxLayout(self.display_container)
 
+        # 对于MPR多平面视图，创建标签页
+        self.view_tabs = QTabWidget()
+        self.view_tabs.setVisible(False)  # 初始隐藏标签页
+        
+        # 创建三个标准平面的显示窗口
+        self.axial_widget = QVTKRenderWindowInteractor()
+        self.coronal_widget = QVTKRenderWindowInteractor()
+        self.sagittal_widget = QVTKRenderWindowInteractor()
+        
+        # 为每个标准平面创建渲染器和渲染窗口
+        self.axial_renderer = vtk.vtkRenderer()
+        self.axial_renderer.SetBackground(0.2, 0.2, 0.2)
+        axial_window = self.axial_widget.GetRenderWindow()
+        axial_window.AddRenderer(self.axial_renderer)
+        
+        self.coronal_renderer = vtk.vtkRenderer()
+        self.coronal_renderer.SetBackground(0.2, 0.2, 0.2)
+        coronal_window = self.coronal_widget.GetRenderWindow()
+        coronal_window.AddRenderer(self.coronal_renderer)
+        
+        self.sagittal_renderer = vtk.vtkRenderer()
+        self.sagittal_renderer.SetBackground(0.2, 0.2, 0.2)
+        sagittal_window = self.sagittal_widget.GetRenderWindow()
+        sagittal_window.AddRenderer(self.sagittal_renderer)
+        
+        # 添加到标签页
+        self.view_tabs.addTab(self.axial_widget, "Axial (XY)")
+        self.view_tabs.addTab(self.coronal_widget, "Coronal (XZ)")
+        self.view_tabs.addTab(self.sagittal_widget, "Sagittal (YZ)")
+        
         # 缓存预设的传输函数以提高性能
         self._cached_transfer_functions = {}
 
@@ -367,6 +533,7 @@ class VTKReconstructionTab(QWidget):
         
         self.vtk_widget.setFocusPolicy(Qt.StrongFocus)  # 设置焦点策略
         self.display_layout.addWidget(self.vtk_widget)
+        self.display_layout.addWidget(self.view_tabs)
         
         # 添加到分割器
         self.splitter.addWidget(self.controls_container)
@@ -389,6 +556,23 @@ class VTKReconstructionTab(QWidget):
         
         # 添加计时回调函数，用于计算每帧的渲染时间和FPS
         self.vtk_widget.GetRenderWindow().AddObserver('RenderEvent', self.count_fps)
+
+        # MPR相关变量
+        self.mpr_plane = None
+        self.mpr_plane_actor = None
+        self.mpr_mapper = None
+        self.mpr_reslice = None
+        self.multiview_enabled = False
+        self.mpr_widgets = {
+            "Axial (XY)": self.axial_widget,
+            "Coronal (XZ)": self.coronal_widget,
+            "Sagittal (YZ)": self.sagittal_widget
+        }
+        self.mpr_renderers = {
+            "Axial (XY)": self.axial_renderer,
+            "Coronal (XZ)": self.coronal_renderer,
+            "Sagittal (YZ)": self.sagittal_renderer
+        }
 
     def create_fps_display(self):
         """创建FPS显示的文本Actor"""
@@ -467,54 +651,380 @@ class VTKReconstructionTab(QWidget):
     
     # 添加参数可见性更新方法
     def update_parameter_visibility(self, index):
+        """更新参数区域的可见性"""
         is_volume = index == 0  # Volume Rendering是索引0
-        self.volume_params_group.setVisible(is_volume)
-        self.surface_params_group.setVisible(not is_volume)
-
-    def _get_cached_transfer_function(self, name, color_map=None, opacity_value=0.5):
-        """从缓存获取传输函数，如果不存在或参数变化则创建新的"""
-        key = f"{name}_{color_map}_{opacity_value}"
+        is_surface = index == 1  # Surface Rendering是索引1
+        is_mpr = index == 2     # MPR是索引2
         
-        if key not in self._cached_transfer_functions:
-            if name == "color":
-                # 设置颜色传输函数
-                volume_color = vtk.vtkColorTransferFunction()
-                
-                if color_map == "Grayscale":
-                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)
-                    volume_color.AddRGBPoint(1000, 1.0, 1.0, 1.0)
-                elif color_map == "Rainbow":
-                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)
-                    volume_color.AddRGBPoint(400, 0.0, 0.0, 1.0)  # 蓝色
-                    volume_color.AddRGBPoint(700, 0.0, 1.0, 0.0)  # 绿色
-                    volume_color.AddRGBPoint(1000, 1.0, 0.0, 0.0)  # 红色
-                    volume_color.AddRGBPoint(1500, 1.0, 1.0, 1.0)  # 白色
-                elif color_map == "Hot Metal":
-                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)
-                    volume_color.AddRGBPoint(400, 0.5, 0.0, 0.0)
-                    volume_color.AddRGBPoint(700, 1.0, 0.5, 0.0)
-                    volume_color.AddRGBPoint(1000, 1.0, 1.0, 0.0)
-                    volume_color.AddRGBPoint(1500, 1.0, 1.0, 1.0)
-                else:  # Default
-                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)    # 黑色背景
-                    volume_color.AddRGBPoint(500, 1.0, 0.5, 0.3)  # 组织
-                    volume_color.AddRGBPoint(1000, 1.0, 0.9, 0.9) # 骨骼
-                    volume_color.AddRGBPoint(1150, 1.0, 1.0, 1.0) # 高密度区域
-                
-                self._cached_transfer_functions[key] = volume_color
-            elif name == "opacity":
-                # 设置不透明度传输函数
-                volume_scalar_opacity = vtk.vtkPiecewiseFunction()
-                # 根据不透明度值调整
-                opacity_scale = opacity_value  # 0.0-1.0范围
-                volume_scalar_opacity.AddPoint(0, 0.00)
-                volume_scalar_opacity.AddPoint(500, 0.15 * opacity_scale)
-                volume_scalar_opacity.AddPoint(1000, 0.85 * opacity_scale)
-                volume_scalar_opacity.AddPoint(1150, 1.00 * opacity_scale)
-                self._cached_transfer_functions[key] = volume_scalar_opacity
-                
-        return self._cached_transfer_functions[key]
-
+        self.volume_params_group.setVisible(is_volume)
+        self.surface_params_group.setVisible(is_surface)
+        self.mpr_params_group.setVisible(is_mpr)
+        
+        # 对于MPR模式，切换到对应的界面布局
+        if is_mpr and self.reader is not None:
+            # 如果启用了多平面视图，显示标签页
+            self.view_tabs.setVisible(self.multiview_enabled)
+        else:
+            self.view_tabs.setVisible(False)
+    
+    def update_mpr_plane(self, index):
+        """更新MPR平面类型"""
+        plane_type = self.mpr_plane_combo.currentText()
+        # 只有在Oblique模式下才显示旋转控件
+        self.oblique_controls.setVisible(plane_type == "Oblique")
+        
+        # 如果已加载数据，更新MPR显示
+        if self.reader is not None and self.mpr_plane is not None:
+            self.setup_mpr()
+    
+    def update_mpr_position(self, value):
+        """更新MPR平面位置"""
+        if self.reader is None or self.mpr_reslice is None:
+            return
+            
+        # 获取图像尺寸
+        extent = self.reader.GetOutput().GetExtent()
+        dimensions = [
+            extent[1] - extent[0] + 1,
+            extent[3] - extent[2] + 1,
+            extent[5] - extent[4] + 1
+        ]
+        
+        # 计算相对位置(0-1范围)
+        relative_pos = value / 100.0
+        
+        # 根据当前平面类型设置切片位置
+        plane_type = self.mpr_plane_combo.currentText()
+        if plane_type == "Axial (XY)":
+            position = extent[4] + relative_pos * dimensions[2]
+            self.mpr_reslice.SetResliceAxesOrigin(0, 0, position)
+        elif plane_type == "Coronal (XZ)":
+            position = extent[2] + relative_pos * dimensions[1]
+            self.mpr_reslice.SetResliceAxesOrigin(0, position, 0)
+        elif plane_type == "Sagittal (YZ)":
+            position = extent[0] + relative_pos * dimensions[0]
+            self.mpr_reslice.SetResliceAxesOrigin(position, 0, 0)
+        else:  # Oblique模式下，不改变原点，而是通过旋转矩阵调整
+            # 保持当前原点不变
+            pass
+        
+        # 更新显示
+        self.mpr_reslice.Update()
+        self.vtk_widget.GetRenderWindow().Render()
+        
+        # 如果是多视图模式，更新当前活动的视图
+        if self.multiview_enabled:
+            active_tab = self.view_tabs.currentWidget()
+            if active_tab is not None:
+                active_tab.GetRenderWindow().Render()
+    
+    def update_oblique_plane(self):
+        """更新斜截面的方向"""
+        if self.reader is None or self.mpr_reslice is None or self.mpr_plane_combo.currentText() != "Oblique":
+            return
+            
+        # 获取旋转角度
+        x_angle = self.x_rotation_slider.value()
+        y_angle = self.y_rotation_slider.value()
+        z_angle = self.z_rotation_slider.value()
+        
+        # 创建旋转矩阵
+        transform = vtk.vtkTransform()
+        transform.Identity()
+        transform.RotateX(x_angle)
+        transform.RotateY(y_angle)
+        transform.RotateZ(z_angle)
+        
+        # 应用旋转矩阵
+        self.mpr_reslice.SetResliceAxes(transform.GetMatrix())
+        
+        # 更新显示
+        self.mpr_reslice.Update()
+        self.vtk_widget.GetRenderWindow().Render()
+        
+        # 如果是多视图模式，更新当前活动的视图
+        if self.multiview_enabled:
+            active_tab = self.view_tabs.currentWidget()
+            if active_tab is not None:
+                active_tab.GetRenderWindow().Render()
+    
+    def update_window_level(self):
+        """更新窗宽窗位"""
+        if self.mpr_mapper is None:
+            return
+            
+        window_width = self.window_width_slider.value()
+        window_level = self.window_level_slider.value()
+        
+        # 应用窗宽窗位
+        self.mpr_mapper.SetWindow(window_width)
+        self.mpr_mapper.SetLevel(window_level)
+        
+        # 更新显示
+        self.vtk_widget.GetRenderWindow().Render()
+        
+        # 如果是多视图模式，更新所有视图
+        if self.multiview_enabled:
+            for widget in self.mpr_widgets.values():
+                if widget.GetRenderWindow():
+                    widget.GetRenderWindow().Render()
+    
+    def toggle_multiview(self, state):
+        """切换是否显示三平面视图"""
+        self.multiview_enabled = state == Qt.Checked
+        
+        # 根据当前渲染方法决定是否显示标签页
+        is_mpr = self.render_combo.currentText() == "MPR (Multi-Planar Reconstruction)"
+        self.view_tabs.setVisible(is_mpr and self.multiview_enabled)
+        
+        # 如果启用多视图且已加载数据，设置三个平面
+        if self.multiview_enabled and self.reader is not None:
+            self.setup_multiview_mpr()
+        else:
+            # 确保主视图显示当前选择的平面
+            self.setup_mpr()
+    
+    def setup_multiview_mpr(self):
+        """设置三平面MPR视图"""
+        if self.reader is None:
+            return
+            
+        # 为每个平面创建MPR重建
+        self.setup_axial_mpr()
+        self.setup_coronal_mpr()
+        self.setup_sagittal_mpr()
+        
+        # 渲染所有视图
+        for widget in self.mpr_widgets.values():
+            widget.GetRenderWindow().Render()
+    
+    def setup_axial_mpr(self):
+        """设置轴向MPR视图"""
+        # 创建轴向(XY)平面的重切片器
+        axial_reslice = vtk.vtkImageReslice()
+        axial_reslice.SetInputConnection(self.reader.GetOutputPort())
+        axial_reslice.SetOutputDimensionality(2)
+        axial_reslice.SetInterpolationModeToLinear()
+        
+        # 设置轴向平面(XY)
+        transform = vtk.vtkTransform()
+        transform.Identity()
+        axial_reslice.SetResliceAxes(transform.GetMatrix())
+        
+        # 设置初始位置
+        extent = self.reader.GetOutput().GetExtent()
+        dimensions = [
+            extent[1] - extent[0] + 1,
+            extent[3] - extent[2] + 1,
+            extent[5] - extent[4] + 1
+        ]
+        mid_slice_z = extent[4] + dimensions[2] // 2
+        axial_reslice.SetResliceAxesOrigin(0, 0, mid_slice_z)
+        
+        # 创建颜色映射
+        axial_mapper = vtk.vtkImageMapToWindowLevelColors()
+        axial_mapper.SetInputConnection(axial_reslice.GetOutputPort())
+        axial_mapper.SetOutputFormatToRGB()
+        
+        # 应用窗宽窗位
+        axial_mapper.SetWindow(self.window_width_slider.value())
+        axial_mapper.SetLevel(self.window_level_slider.value())
+        
+        # 创建Actor
+        axial_actor = vtk.vtkImageActor()
+        axial_actor.GetMapper().SetInputConnection(axial_mapper.GetOutputPort())
+        
+        # 添加到渲染器
+        self.axial_renderer.RemoveAllViewProps()
+        self.axial_renderer.AddActor(axial_actor)
+        self.axial_renderer.ResetCamera()
+    
+    def setup_coronal_mpr(self):
+        """设置冠状位MPR视图"""
+        # 创建冠状位(XZ)平面的重切片器
+        coronal_reslice = vtk.vtkImageReslice()
+        coronal_reslice.SetInputConnection(self.reader.GetOutputPort())
+        coronal_reslice.SetOutputDimensionality(2)
+        coronal_reslice.SetInterpolationModeToLinear()
+        
+        # 设置冠状位平面(XZ)
+        transform = vtk.vtkTransform()
+        transform.Identity()
+        transform.RotateX(90)  # 绕X轴旋转90度，形成XZ平面
+        coronal_reslice.SetResliceAxes(transform.GetMatrix())
+        
+        # 设置初始位置
+        extent = self.reader.GetOutput().GetExtent()
+        dimensions = [
+            extent[1] - extent[0] + 1,
+            extent[3] - extent[2] + 1,
+            extent[5] - extent[4] + 1
+        ]
+        mid_slice_y = extent[2] + dimensions[1] // 2
+        coronal_reslice.SetResliceAxesOrigin(0, mid_slice_y, 0)
+        
+        # 创建颜色映射
+        coronal_mapper = vtk.vtkImageMapToWindowLevelColors()
+        coronal_mapper.SetInputConnection(coronal_reslice.GetOutputPort())
+        coronal_mapper.SetOutputFormatToRGB()
+        
+        # 应用窗宽窗位
+        coronal_mapper.SetWindow(self.window_width_slider.value())
+        coronal_mapper.SetLevel(self.window_level_slider.value())
+        
+        # 创建Actor
+        coronal_actor = vtk.vtkImageActor()
+        coronal_actor.GetMapper().SetInputConnection(coronal_mapper.GetOutputPort())
+        
+        # 添加到渲染器
+        self.coronal_renderer.RemoveAllViewProps()
+        self.coronal_renderer.AddActor(coronal_actor)
+        self.coronal_renderer.ResetCamera()
+    
+    def setup_sagittal_mpr(self):
+        """设置矢状位MPR视图"""
+        # 创建矢状位(YZ)平面的重切片器
+        sagittal_reslice = vtk.vtkImageReslice()
+        sagittal_reslice.SetInputConnection(self.reader.GetOutputPort())
+        sagittal_reslice.SetOutputDimensionality(2)
+        sagittal_reslice.SetInterpolationModeToLinear()
+        
+        # 设置矢状位平面(YZ)
+        transform = vtk.vtkTransform()
+        transform.Identity()
+        transform.RotateY(90)  # 绕Y轴旋转90度，形成YZ平面
+        sagittal_reslice.SetResliceAxes(transform.GetMatrix())
+        
+        # 设置初始位置
+        extent = self.reader.GetOutput().GetExtent()
+        dimensions = [
+            extent[1] - extent[0] + 1,
+            extent[3] - extent[2] + 1,
+            extent[5] - extent[4] + 1
+        ]
+        mid_slice_x = extent[0] + dimensions[0] // 2
+        sagittal_reslice.SetResliceAxesOrigin(mid_slice_x, 0, 0)
+        
+        # 创建颜色映射
+        sagittal_mapper = vtk.vtkImageMapToWindowLevelColors()
+        sagittal_mapper.SetInputConnection(sagittal_reslice.GetOutputPort())
+        sagittal_mapper.SetOutputFormatToRGB()
+        
+        # 应用窗宽窗位
+        sagittal_mapper.SetWindow(self.window_width_slider.value())
+        sagittal_mapper.SetLevel(self.window_level_slider.value())
+        
+        # 创建Actor
+        sagittal_actor = vtk.vtkImageActor()
+        sagittal_actor.GetMapper().SetInputConnection(sagittal_mapper.GetOutputPort())
+        
+        # 添加到渲染器
+        self.sagittal_renderer.RemoveAllViewProps()
+        self.sagittal_renderer.AddActor(sagittal_actor)
+        self.sagittal_renderer.ResetCamera()
+    
+    def setup_mpr(self):
+        """设置单一MPR视图"""
+        if self.reader is None:
+            return
+            
+        # 清除现有渲染
+        self.renderer.RemoveAllViewProps()
+        
+        # 重新添加FPS文本Actor
+        if self.fps_text_actor:
+            self.renderer.AddActor2D(self.fps_text_actor)
+        
+        # 创建重切片器
+        self.mpr_reslice = vtk.vtkImageReslice()
+        self.mpr_reslice.SetInputConnection(self.reader.GetOutputPort())
+        self.mpr_reslice.SetOutputDimensionality(2)
+        self.mpr_reslice.SetInterpolationModeToLinear()
+        
+        # 获取图像尺寸
+        extent = self.reader.GetOutput().GetExtent()
+        dimensions = [
+            extent[1] - extent[0] + 1,
+            extent[3] - extent[2] + 1,
+            extent[5] - extent[4] + 1
+        ]
+        
+        # 根据平面类型设置方向和位置
+        plane_type = self.mpr_plane_combo.currentText()
+        if plane_type == "Axial (XY)":
+            # 轴向平面(XY)
+            transform = vtk.vtkTransform()
+            transform.Identity()
+            self.mpr_reslice.SetResliceAxes(transform.GetMatrix())
+            
+            # 设置到中间位置
+            mid_slice_z = extent[4] + dimensions[2] // 2
+            self.mpr_reslice.SetResliceAxesOrigin(0, 0, mid_slice_z)
+            
+        elif plane_type == "Coronal (XZ)":
+            # 冠状位平面(XZ)
+            transform = vtk.vtkTransform()
+            transform.Identity()
+            transform.RotateX(90)  # 绕X轴旋转90度，形成XZ平面
+            self.mpr_reslice.SetResliceAxes(transform.GetMatrix())
+            
+            # 设置到中间位置
+            mid_slice_y = extent[2] + dimensions[1] // 2
+            self.mpr_reslice.SetResliceAxesOrigin(0, mid_slice_y, 0)
+            
+        elif plane_type == "Sagittal (YZ)":
+            # 矢状位平面(YZ)
+            transform = vtk.vtkTransform()
+            transform.Identity()
+            transform.RotateY(90)  # 绕Y轴旋转90度，形成YZ平面
+            self.mpr_reslice.SetResliceAxes(transform.GetMatrix())
+            
+            # 设置到中间位置
+            mid_slice_x = extent[0] + dimensions[0] // 2
+            self.mpr_reslice.SetResliceAxesOrigin(mid_slice_x, 0, 0)
+            
+        else:  # Oblique
+            # 斜截面
+            transform = vtk.vtkTransform()
+            transform.Identity()
+            transform.RotateX(self.x_rotation_slider.value())
+            transform.RotateY(self.y_rotation_slider.value())
+            transform.RotateZ(self.z_rotation_slider.value())
+            self.mpr_reslice.SetResliceAxes(transform.GetMatrix())
+            
+            # 设置到中心位置
+            center = [
+                (extent[0] + extent[1]) / 2,
+                (extent[2] + extent[3]) / 2,
+                (extent[4] + extent[5]) / 2
+            ]
+            self.mpr_reslice.SetResliceAxesOrigin(center)
+        
+        # 创建颜色映射
+        self.mpr_mapper = vtk.vtkImageMapToWindowLevelColors()
+        self.mpr_mapper.SetInputConnection(self.mpr_reslice.GetOutputPort())
+        self.mpr_mapper.SetOutputFormatToRGB()
+        
+        # 应用窗宽窗位
+        self.mpr_mapper.SetWindow(self.window_width_slider.value())
+        self.mpr_mapper.SetLevel(self.window_level_slider.value())
+        
+        # 创建Actor
+        self.mpr_plane_actor = vtk.vtkImageActor()
+        self.mpr_plane_actor.GetMapper().SetInputConnection(self.mpr_mapper.GetOutputPort())
+        
+        # 添加到渲染器
+        self.renderer.AddActor(self.mpr_plane_actor)
+        
+        # 重置相机
+        self.renderer.ResetCamera()
+        
+        # 更新显示
+        self.vtk_widget.GetRenderWindow().Render()
+        
+        # 更新位置滑块的取值范围
+        self.mpr_position_slider.setValue(50)  # 重置到中间位置
+    
     def start_reconstruction(self):
         if not self.reader:
             self.status_bar.showMessage("Please load DICOM data first!")
@@ -579,6 +1089,7 @@ class VTKReconstructionTab(QWidget):
                 # 添加到渲染器
                 self.renderer.AddVolume(volume)
                 self.save_stl_button.setEnabled(False)  # 体积渲染不支持STL保存
+                self.view_tabs.setVisible(False)  # 确保标签页不可见
 
             elif render_method == "Surface Rendering":
                 # 获取面绘制参数
@@ -648,6 +1159,20 @@ class VTKReconstructionTab(QWidget):
                 # 保存当前的模型以便保存STL
                 self.current_model = normals
                 self.save_stl_button.setEnabled(True)  # 启用STL保存按钮
+                self.view_tabs.setVisible(False)  # 确保标签页不可见
+
+            elif render_method == "MPR (Multi-Planar Reconstruction)":
+                # 设置MPR显示
+                if self.multiview_enabled:
+                    # 多平面视图
+                    self.setup_multiview_mpr()
+                    self.view_tabs.setVisible(True)
+                else:
+                    # 单平面视图
+                    self.setup_mpr()
+                    self.view_tabs.setVisible(False)
+                
+                self.save_stl_button.setEnabled(False)  # MPR不支持STL保存
 
             # 重置相机并渲染
             self.renderer.ResetCamera()
@@ -730,3 +1255,47 @@ class VTKReconstructionTab(QWidget):
             
         except Exception as e:
             self.status_bar.showMessage(f"Error saving STL file: {str(e)}") 
+
+    def _get_cached_transfer_function(self, name, color_map=None, opacity_value=0.5):
+        """从缓存获取传输函数，如果不存在或参数变化则创建新的"""
+        key = f"{name}_{color_map}_{opacity_value}"
+        
+        if key not in self._cached_transfer_functions:
+            if name == "color":
+                # 设置颜色传输函数
+                volume_color = vtk.vtkColorTransferFunction()
+                
+                if color_map == "Grayscale":
+                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)
+                    volume_color.AddRGBPoint(1000, 1.0, 1.0, 1.0)
+                elif color_map == "Rainbow":
+                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)
+                    volume_color.AddRGBPoint(400, 0.0, 0.0, 1.0)  # 蓝色
+                    volume_color.AddRGBPoint(700, 0.0, 1.0, 0.0)  # 绿色
+                    volume_color.AddRGBPoint(1000, 1.0, 0.0, 0.0)  # 红色
+                    volume_color.AddRGBPoint(1500, 1.0, 1.0, 1.0)  # 白色
+                elif color_map == "Hot Metal":
+                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)
+                    volume_color.AddRGBPoint(400, 0.5, 0.0, 0.0)
+                    volume_color.AddRGBPoint(700, 1.0, 0.5, 0.0)
+                    volume_color.AddRGBPoint(1000, 1.0, 1.0, 0.0)
+                    volume_color.AddRGBPoint(1500, 1.0, 1.0, 1.0)
+                else:  # Default
+                    volume_color.AddRGBPoint(0, 0.0, 0.0, 0.0)    # 黑色背景
+                    volume_color.AddRGBPoint(500, 1.0, 0.5, 0.3)  # 组织
+                    volume_color.AddRGBPoint(1000, 1.0, 0.9, 0.9) # 骨骼
+                    volume_color.AddRGBPoint(1150, 1.0, 1.0, 1.0) # 高密度区域
+                
+                self._cached_transfer_functions[key] = volume_color
+            elif name == "opacity":
+                # 设置不透明度传输函数
+                volume_scalar_opacity = vtk.vtkPiecewiseFunction()
+                # 根据不透明度值调整
+                opacity_scale = opacity_value  # 0.0-1.0范围
+                volume_scalar_opacity.AddPoint(0, 0.00)
+                volume_scalar_opacity.AddPoint(500, 0.15 * opacity_scale)
+                volume_scalar_opacity.AddPoint(1000, 0.85 * opacity_scale)
+                volume_scalar_opacity.AddPoint(1150, 1.00 * opacity_scale)
+                self._cached_transfer_functions[key] = volume_scalar_opacity
+                
+        return self._cached_transfer_functions[key] 
