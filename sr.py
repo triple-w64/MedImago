@@ -64,6 +64,9 @@ class SuperResolutionTab(QWidget):
         self.file_tree.setHeaderLabel("Files")
         self.file_tree.itemDoubleClicked.connect(self.open_selected_file)
         
+        # 添加文件树展开事件处理
+        self.file_tree.itemExpanded.connect(self.on_item_expanded)
+        
         # 创建水平布局放置按钮
         button_layout = QHBoxLayout()
         
@@ -208,8 +211,8 @@ class SuperResolutionTab(QWidget):
             # 批量添加目录
             for dir_item, full_path in dir_items:
                 parent_item.addChild(dir_item)
-                # 延迟加载子目录，只有当用户展开目录时才加载
-                # 这里可以添加一个展开监听器
+                # 添加展开监听器，确保可以打开下级文件夹
+                dir_item.setChildIndicatorPolicy(QTreeWidgetItem.ShowIndicator)
             
             # 批量添加文件
             for file_item in file_items:
@@ -314,7 +317,7 @@ class SuperResolutionTab(QWidget):
         algo_layout = QHBoxLayout()
         self.algo_label = QLabel("SR Algorithm:")
         self.algo_combo = QComboBox()
-        self.algo_combo.addItems(["Bilinear", "Bicubic", "EDSR", "ESPCN", "FSRCNN", "FFSCN", "LAPSRN"])
+        self.algo_combo.addItems(["Bilinear", "Bicubic", "EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"])
         algo_layout.addWidget(self.algo_label)
         algo_layout.addWidget(self.algo_combo)
         algo_layout.addStretch()
@@ -504,7 +507,7 @@ class SuperResolutionTab(QWidget):
         algorithm = self.algo_combo.currentText()
         start_time = time.time()
 
-        if algorithm in ["EDSR", "ESPCN", "FSRCNN", "FFSCN", "LAPSRN"]:
+        if algorithm in ["EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"]:
             self.load_dnn_sr_model(algorithm, scale)
             sr_image = self.run_dnn_super_resolution()
         elif algorithm in ["Bilinear", "Bicubic"]:
@@ -534,11 +537,11 @@ class SuperResolutionTab(QWidget):
     def load_dnn_sr_model(self, method, scale):
         """优化模型加载过程"""
         model_paths = {
-            "EDSR": f"./Platform/Model/EDSR_x{scale}.pb",
-            "ESPCN": f"./Platform/Model/ESPCN_x{scale}.pb",
-            "FSRCNN": f"./Platform/Model/FSRCNN_x{scale}.pb",
-            "SCN": f"./Platform/Model/FFSCN_x{scale}.pb",
-            "LAPSRN": f"./Platform/Model/LAPSRN_x{scale}.pb"
+            "EDSR": f"Model/EDSR_x{scale}.pb",
+            "ESPCN": f"Model/ESPCN_x{scale}.pb",
+            "FSRCNN": f"Model/FSRCNN_x{scale}.pb",
+            "SCN": f"Model/EchoSR_x{scale}.pb",
+            "LAPSRN": f"Model/LAPSRN_x{scale}.pb"
         }
         
         model_path = model_paths[method]
@@ -601,4 +604,23 @@ class SuperResolutionTab(QWidget):
                 if self.play_button.isEnabled() == False:  # 如果处于播放状态
                     self.timer.start(30)
         else:
-            self.status_bar.showMessage("没有视频流可以冻结!") 
+            self.status_bar.showMessage("没有视频流可以冻结!")
+
+    def on_item_expanded(self, item):
+        """处理目录展开事件，加载子目录内容"""
+        # 检查是否已经加载了子项
+        if item.childCount() > 0:
+            # 检查第一个子项是否是占位符
+            first_child = item.child(0)
+            if first_child and first_child.text(0) == "Loading...":
+                # 移除占位符
+                item.removeChild(first_child)
+            else:
+                # 已经加载过内容，不需要再次加载
+                return
+            
+        # 获取目录路径
+        dir_path = item.data(0, Qt.UserRole)
+        if os.path.isdir(dir_path):
+            # 加载目录内容
+            self._add_directory_contents(item, dir_path) 
