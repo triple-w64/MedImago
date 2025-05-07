@@ -3,9 +3,9 @@ import os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QAction, 
     QTabWidget, QFileDialog, QSplitter, QWidget, QDesktopWidget,
-    QTextBrowser, QVBoxLayout, QDialog
+    QTextBrowser, QVBoxLayout, QDialog, QMenu, QToolButton
 )
-from PyQt5.QtCore import Qt, QCoreApplication
+from PyQt5.QtCore import Qt, QCoreApplication, QTimer, QSize
 from PyQt5.QtGui import QFont, QIcon, QTextCursor
 
 # 必要的Qt属性设置 - 在应用程序创建前设置
@@ -37,7 +37,7 @@ class HelpDialog(QDialog):
         
     def load_readme(self):
         """加载README.md文件内容"""
-        readme_path = os.path.join("MedSAM", "README.md")
+        readme_path = os.path.join("README.md")  # 修改为加载项目根目录的README
         if os.path.exists(readme_path):
             try:
                 with open(readme_path, 'r', encoding='utf-8') as file:
@@ -86,8 +86,11 @@ class MainApp(QMainWindow):
         # 基本窗口设置
         self.setWindowTitle("AI 4 Echocardiography_IMRIS")
         
-        # 设置窗口大小为1920x1080
-        self.resize(1920, 1080)
+        # 设置更合理的初始窗口大小
+        screen_size = QDesktopWidget().availableGeometry().size()
+        window_width = min(1600, screen_size.width() - 100)
+        window_height = min(900, screen_size.height() - 100)
+        self.resize(window_width, window_height)
         
         # 将窗口居中显示
         self.center_window()
@@ -104,10 +107,10 @@ class MainApp(QMainWindow):
 
         # 创建菜单栏
         self.menubar = self.menuBar()
-        self.view_menu = self.menubar.addMenu("View")
+        self.view_menu = self.menubar.addMenu("视图")
 
         # 创建工具栏
-        self.toolbar = QToolBar("Main Toolbar")
+        self.toolbar = QToolBar("主工具栏")
         self.toolbar.setMovable(True)  # 允许移动
         self.toolbar.setFloatable(True)  # 允许浮动
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)  # 指定工具栏区域为顶部
@@ -124,6 +127,10 @@ class MainApp(QMainWindow):
         
         # 创建标签页
         self.create_tabs()
+        
+        # 设置应用程序默认为全屏显示
+        # 直接设置为最大化
+        self.showMaximized()
     
     def center_window(self):
         """将窗口居中显示"""
@@ -149,21 +156,74 @@ class MainApp(QMainWindow):
 
     def create_actions(self):
         """创建工具栏动作"""
-        self.open_action = QAction("Open", self)
-        self.clear_action = QAction("Clear", self)
-        self.measure_action = QAction("Measure", self)
-        self.tool_action = QAction("Tool", self)
-        self.help_action = QAction("Help", self)
+        # 创建动作并添加图标
+        self.open_action = QAction("打开", self)
+        self.open_action.setToolTip("打开文件")
+        
+        self.clear_action = QAction("清除", self)
+        self.clear_action.setToolTip("清除当前内容")
+        
+        # 工具菜单相关
+        self.tool_action = QAction("工具", self)
+        self.tool_action.setToolTip("工具选项")
+        
+        # 创建工具菜单
+        self.tool_menu = QMenu(self)
+        
+        # 距离测量工具移到工具菜单中
+        self.distance_measure_action = QAction("距离测量", self)
+        self.distance_measure_action.setCheckable(True)
+        self.distance_measure_action.setToolTip("点击启用后在图像上拖动可测量距离")
+        self.distance_measure_action.triggered.connect(self.toggle_distance_measure)
+        
+        # 添加到工具菜单
+        self.tool_menu.addAction(self.distance_measure_action)
+        
+        # 将菜单关联到工具按钮
+        self.tool_action.setMenu(self.tool_menu)
+        
+        self.help_action = QAction("帮助", self)
+        self.help_action.setToolTip("显示帮助")
 
+        # 连接动作信号
         self.open_action.triggered.connect(self.handle_open)
         self.clear_action.triggered.connect(self.handle_clear)
         self.help_action.triggered.connect(self.show_help)
 
+        # 添加动作到工具栏
         self.toolbar.addAction(self.open_action)
         self.toolbar.addAction(self.clear_action)
-        self.toolbar.addAction(self.measure_action)
-        self.toolbar.addAction(self.tool_action)
+        
+        # 直接创建一个工具按钮，而不是使用addAction
+        tool_button = QToolButton()
+        tool_button.setText("工具")
+        tool_button.setToolTip("工具选项")
+        tool_button.setPopupMode(QToolButton.InstantPopup)  # 改回InstantPopup，任何点击都显示菜单
+        tool_button.setMenu(self.tool_menu)
+        # 使按钮样式与工具栏一致
+        tool_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        # 添加按钮到工具栏
+        self.toolbar.addWidget(tool_button)
+        
         self.toolbar.addAction(self.help_action)
+        
+        # 设置工具栏样式，确保按钮文字可见
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        # 设置工具栏图标大小
+        self.toolbar.setIconSize(QSize(24, 24))
+
+    def toggle_distance_measure(self, checked):
+        """切换距离测量工具的状态"""
+        current_tab = self.tab_widget.currentWidget()
+        # 检查当前标签页类型并启用或禁用测量工具
+        if hasattr(current_tab, 'enable_distance_measure'):
+            current_tab.enable_distance_measure(checked)
+            if checked:
+                self.status_bar.showMessage("距离测量工具已启用")
+            else:
+                self.status_bar.showMessage("距离测量工具已禁用")
+                # 取消选中状态
+                self.distance_measure_action.setChecked(False)
 
     def show_help(self):
         """显示帮助对话框"""
@@ -208,6 +268,13 @@ class MainApp(QMainWindow):
         self.open_action.setEnabled(True)  # 所有标签页都可以打开文件
         self.clear_action.setEnabled(True)  # 所有标签页都可以清除内容
         
+        # 切换标签页时取消选中测量工具
+        if self.distance_measure_action.isChecked():
+            self.distance_measure_action.setChecked(False)
+            # 如果当前标签页支持测量功能，则禁用它
+            if hasattr(current_tab, 'enable_distance_measure'):
+                current_tab.enable_distance_measure(False)
+        
         # 针对VTK重建页面的特殊处理
         if index == 2:  # 3D重建标签页
             # 确保VTK渲染器正确初始化
@@ -249,65 +316,85 @@ class MainApp(QMainWindow):
 
     def handle_clear(self):
         """处理清除图像/模型动作"""
-        current_tab = self.tab_widget.widget(self.tab_widget.currentIndex())
-        
-        # 超分辨率标签页
-        if isinstance(current_tab, SuperResolutionTab):
-            # 检查是否有图像
-            if current_tab.image is not None:
-                # 清除原始图像标签
-                current_tab.video_label.clear()
-                
-                # 使用image_viewer清除SR结果
-                if hasattr(current_tab, 'image_viewer'):
-                    current_tab.image_viewer.scene().clear()
-                
-                # 重置图像变量
-                current_tab.image = None
-                current_tab.sr_result = None
-                # 禁用保存按钮
-                current_tab.save_button.setEnabled(False)
-                self.status_bar.showMessage("Images cleared")
-            else:
-                self.status_bar.showMessage("No image to clear")
-        
-        # 分割标签页
-        elif isinstance(current_tab, MedSAMTab):
-            # 清除分割相关内容
-            if current_tab.img_3c is not None:
-                # 清除场景
-                current_tab.scene.clear()
-                # 重置图像和掩码变量
-                current_tab.img_3c = None
-                current_tab.mask_c = None
-                current_tab.embedding = None
-                current_tab.prev_mask = None
-                # 清除EDV和ESV标签
-                current_tab.edv_label.clear()
-                current_tab.esv_label.clear()
-                current_tab.edv_mask = None
-                current_tab.esv_mask = None
-                # 更新掩码状态
-                current_tab.update_mask_status()
-                self.status_bar.showMessage("Segmentation data cleared")
-            else:
-                self.status_bar.showMessage("No segmentation data to clear")
-        
-        # 3D重建标签页
-        elif isinstance(current_tab, VTKReconstructionTab):
-            # 清除3D重建相关内容
-            if current_tab.reader is not None:
-                # 重置读取器
-                current_tab.reader = None
-                current_tab.current_model = None
-                # 清除渲染器
-                if hasattr(current_tab, 'renderer'):
-                    current_tab.renderer.RemoveAllViewProps()
-                    if hasattr(current_tab.vtk_widget, 'GetRenderWindow'):
-                        current_tab.vtk_widget.GetRenderWindow().Render()
-                self.status_bar.showMessage("3D model cleared")
-            else:
-                self.status_bar.showMessage("No 3D model to clear")
+        try:
+            # 获取当前活动的标签页
+            current_index = self.tab_widget.currentIndex()
+            
+            # 超分辨率标签页
+            if current_index == 0:
+                sr_tab = self.sr_tab
+                # 检查是否有图像
+                if hasattr(sr_tab, 'image') and sr_tab.image is not None:
+                    # 清除原始图像标签
+                    sr_tab.video_label.clear()
+                    
+                    # 使用image_viewer清除SR结果
+                    if hasattr(sr_tab, 'image_viewer') and sr_tab.image_viewer is not None:
+                        sr_tab.image_viewer.scene().clear()
+                    
+                    # 重置图像变量
+                    sr_tab.image = None
+                    sr_tab.sr_result = None
+                    # 禁用保存按钮
+                    sr_tab.save_button.setEnabled(False)
+                    self.status_bar.showMessage("超分辨率图像已清除")
+                else:
+                    self.status_bar.showMessage("超分辨率标签页无图像可清除")
+            
+            # 分割标签页
+            elif current_index == 1:
+                seg_tab = self.seg_tab
+                # 清除分割相关内容
+                if hasattr(seg_tab, 'img_3c') and seg_tab.img_3c is not None:
+                    # 清除场景
+                    seg_tab.scene.clear()
+                    # 重置图像和掩码变量
+                    seg_tab.img_3c = None
+                    seg_tab.mask_c = None
+                    seg_tab.embedding = None
+                    seg_tab.prev_mask = None
+                    # 清除EDV和ESV标签
+                    if hasattr(seg_tab, 'edv_label'):
+                        seg_tab.edv_label.clear()
+                    if hasattr(seg_tab, 'esv_label'):
+                        seg_tab.esv_label.clear()
+                    seg_tab.edv_mask = None
+                    seg_tab.esv_mask = None
+                    # 更新掩码状态
+                    if hasattr(seg_tab, 'update_mask_status'):
+                        seg_tab.update_mask_status()
+                    self.status_bar.showMessage("分割数据已清除")
+                else:
+                    self.status_bar.showMessage("无分割数据可清除")
+            
+            # 3D重建标签页
+            elif current_index == 2:
+                recons_tab = self.recons_tab
+                # 清除3D重建相关内容
+                if hasattr(recons_tab, 'reader') and recons_tab.reader is not None:
+                    # 重置读取器
+                    recons_tab.reader = None
+                    recons_tab.current_model = None
+                    # 清除渲染器
+                    if hasattr(recons_tab, 'renderer'):
+                        recons_tab.renderer.RemoveAllViewProps()
+                        # 重新添加FPS文本Actor
+                        if hasattr(recons_tab, 'fps_text_actor') and recons_tab.fps_text_actor:
+                            recons_tab.renderer.AddActor2D(recons_tab.fps_text_actor)
+                        # 清除MPR三平面视图
+                        if hasattr(recons_tab, 'mpr_axial_view') and recons_tab.mpr_axial_view:
+                            recons_tab.mpr_axial_view.GetRenderer().RemoveAllViewProps()
+                        if hasattr(recons_tab, 'mpr_coronal_view') and recons_tab.mpr_coronal_view:
+                            recons_tab.mpr_coronal_view.GetRenderer().RemoveAllViewProps()
+                        if hasattr(recons_tab, 'mpr_sagittal_view') and recons_tab.mpr_sagittal_view:
+                            recons_tab.mpr_sagittal_view.GetRenderer().RemoveAllViewProps()
+                        if hasattr(recons_tab.vtk_widget, 'GetRenderWindow'):
+                            recons_tab.vtk_widget.GetRenderWindow().Render()
+                    self.status_bar.showMessage("3D模型已清除")
+                else:
+                    self.status_bar.showMessage("无3D模型可清除")
+        except Exception as e:
+            self.status_bar.showMessage(f"清除内容时出错: {str(e)}")
 
 
 if __name__ == "__main__":

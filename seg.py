@@ -52,6 +52,11 @@ class MedSAMTab(QWidget):
 
         # 主布局修改为水平布局
         self.main_layout = QHBoxLayout(self)
+        
+        # 创建可拖动的分割器
+        self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter.setHandleWidth(5)  # 设置拖动条宽度
+        self.main_splitter.setChildrenCollapsible(False)  # 防止区域被完全折叠
 
         # 左侧分割区域
         self.left_widget = QWidget()
@@ -246,9 +251,16 @@ class MedSAMTab(QWidget):
         # 添加到右侧布局
         self.right_layout.addWidget(right_content)
         
-        # 添加到主布局，调整比例更合理
-        self.main_layout.addWidget(self.left_widget, 2)
-        self.main_layout.addWidget(self.right_widget, 1)
+        # 添加左右区域到分割器
+        self.main_splitter.addWidget(self.left_widget)
+        self.main_splitter.addWidget(self.right_widget)
+        
+        # 设置初始比例
+        self.main_splitter.setStretchFactor(0, 2)  # 左侧区域（图像显示）
+        self.main_splitter.setStretchFactor(1, 1)  # 右侧区域（计算控件）
+        
+        # 添加到主布局
+        self.main_layout.addWidget(self.main_splitter)
 
         # EF计算相关变量
         self.edv_mask = None

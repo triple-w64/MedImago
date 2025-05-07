@@ -2,14 +2,16 @@ import os
 import time
 import cv2
 import numpy as np
+import math
 from PyQt5.QtWidgets import (
     QLabel, QPushButton, QFileDialog, QFrame, QSplitter, 
     QVBoxLayout, QHBoxLayout, QWidget, QComboBox, QSpinBox,
     QTreeWidget, QTreeWidgetItem, QGroupBox, QProgressBar,
-    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QScrollArea
+    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QScrollArea,
+    QGraphicsLineItem, QGraphicsTextItem
 )
-from PyQt5.QtCore import Qt, QTimer, QRectF
-from PyQt5.QtGui import QImage, QPixmap, QFont, QWheelEvent, QCursor, QPainter, QBrush, QColor
+from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF
+from PyQt5.QtGui import QImage, QPixmap, QFont, QWheelEvent, QCursor, QPainter, QBrush, QColor, QPen
 
 
 # 超分辨率模块
@@ -18,6 +20,14 @@ class SuperResolutionTab(QWidget):
         super().__init__(parent)
         self.main_window = parent
         self.status_bar = status_bar
+        
+        # 添加距离测量相关变量
+        self.measure_mode = False
+        self.measure_start_point = None
+        self.measure_end_point = None
+        self.measure_line = None
+        self.measure_text = None
+        self.pixel_scale_mm = 0.2  # 默认像素比例尺，单位为mm/pixel
         
         # 添加视频相关的初始化
         self.video_capture = None
@@ -52,8 +62,8 @@ class SuperResolutionTab(QWidget):
         
         # 设置拉伸因子(可自由调整)
         splitter.setStretchFactor(0, 2)  # 文件管理器
-        splitter.setStretchFactor(1, 5)  # 视频播放器
-        splitter.setStretchFactor(2, 2)  # SR控制
+        splitter.setStretchFactor(1, 4)  # 视频播放器
+        splitter.setStretchFactor(2, 4)  # SR控制
 
         # 添加到主布局
         self.main_layout.addWidget(splitter)
@@ -304,7 +314,7 @@ class SuperResolutionTab(QWidget):
         self.right_splitter = QSplitter(Qt.Vertical)
         
         # 图像显示组
-        self.image_display_group = QGroupBox("Image Display")
+        self.image_display_group = QGroupBox("图像显示")
         self.image_display_layout = QVBoxLayout()  # 改为垂直布局
 
         # 创建自定义的可缩放图像查看器
@@ -321,12 +331,12 @@ class SuperResolutionTab(QWidget):
         self.image_display_group.setLayout(self.image_display_layout)
         
         # 控制组
-        self.controls_group = QGroupBox("SR Controls")
+        self.controls_group = QGroupBox("超分辨率控制")
         self.controls_layout = QVBoxLayout()
 
         # Scale Factor选择（水平布局）
         scale_layout = QHBoxLayout()
-        self.scale_label = QLabel("Scale Factor:")
+        self.scale_label = QLabel("放大倍数:")
         self.scale_spinner = QSpinBox()
         self.scale_spinner.setRange(2, 8)
         self.scale_spinner.setValue(2)
@@ -336,7 +346,7 @@ class SuperResolutionTab(QWidget):
         
         # Algorithm选择（水平布局）
         algo_layout = QHBoxLayout()
-        self.algo_label = QLabel("SR Algorithm:")
+        self.algo_label = QLabel("SR算法:")
         self.algo_combo = QComboBox()
         self.algo_combo.addItems(["Bilinear", "Bicubic", "EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"])
         algo_layout.addWidget(self.algo_label)
@@ -346,10 +356,10 @@ class SuperResolutionTab(QWidget):
         self.controls_layout.addLayout(scale_layout)
         self.controls_layout.addLayout(algo_layout)
         
-        self.process_button = QPushButton("Apply SR")
+        self.process_button = QPushButton("应用超分辨率")
         self.process_button.clicked.connect(self.apply_super_resolution)
         
-        self.save_button = QPushButton("Save Result")
+        self.save_button = QPushButton("保存结果")
         self.save_button.clicked.connect(self.save_result)
         self.save_button.setEnabled(False)
 
@@ -551,10 +561,10 @@ class SuperResolutionTab(QWidget):
             
             elapsed_time = end_time - start_time
             # 同时显示原始尺寸和重建后的尺寸
-            self.status_bar.showMessage(f"Processing completed in {elapsed_time:.4f} seconds - Original size: {orig_w}x{orig_h}, SR size: {sr_w}x{sr_h}")
+            self.status_bar.showMessage(f"SR完成, 耗时: {elapsed_time:.2f}秒 - 原始尺寸: {orig_w}×{orig_h}, 重建尺寸: {sr_w}×{sr_h}")
             self.save_button.setEnabled(True)  # 启用保存按钮
         else:
-            self.status_bar.showMessage("Super-resolution failed!")
+            self.status_bar.showMessage("超分辨率重建失败!")
             self.save_button.setEnabled(False)
 
     def run_opencv_interpolation(self, method, scale):
@@ -570,7 +580,7 @@ class SuperResolutionTab(QWidget):
             "EDSR": f"Model/EDSR_x{scale}.pb",
             "ESPCN": f"Model/ESPCN_x{scale}.pb",
             "FSRCNN": f"Model/FSRCNN_x{scale}.pb",
-            "SCN": f"Model/EchoSR_x{scale}.pb",
+            "EchoSR": f"Model/EchoSR_x{scale}.pb",
             "LAPSRN": f"Model/LAPSRN_x{scale}.pb"
         }
         
@@ -654,6 +664,152 @@ class SuperResolutionTab(QWidget):
         if os.path.isdir(dir_path):
             # 加载目录内容
             self._add_directory_contents(item, dir_path) 
+
+    # 添加距离测量相关方法
+    def enable_distance_measure(self, enable):
+        """启用或禁用距离测量功能"""
+        self.measure_mode = enable
+        
+        if enable:
+            # 保存原始的鼠标事件处理器
+            self._original_mouse_press = self.image_viewer.mousePressEvent
+            self._original_mouse_move = self.image_viewer.mouseMoveEvent
+            self._original_mouse_release = self.image_viewer.mouseReleaseEvent
+            
+            # 连接图像查看器鼠标事件
+            self.image_viewer.mousePressEvent = self.measure_mouse_press
+            self.image_viewer.mouseMoveEvent = self.measure_mouse_move
+            self.image_viewer.mouseReleaseEvent = self.measure_mouse_release
+            
+            # 显示提示信息
+            self.status_bar.showMessage("距离测量工具已激活：在图像上点击并拖动以测量距离")
+            
+            # 清除之前的测量线和文本
+            self.clear_measurement()
+        else:
+            # 还原图像查看器默认鼠标事件
+            if hasattr(self, '_original_mouse_press'):
+                self.image_viewer.mousePressEvent = self._original_mouse_press
+                self.image_viewer.mouseMoveEvent = self._original_mouse_move
+                self.image_viewer.mouseReleaseEvent = self._original_mouse_release
+            else:
+                # 如果没有保存原始事件处理器，创建新的ZoomableImageViewer实例来获取默认事件
+                default_viewer = ZoomableImageViewer()
+                self.image_viewer.mousePressEvent = default_viewer.mousePressEvent
+                self.image_viewer.mouseMoveEvent = default_viewer.mouseMoveEvent
+                self.image_viewer.mouseReleaseEvent = default_viewer.mouseReleaseEvent
+            
+            # 清除测量
+            self.clear_measurement()
+            self.status_bar.showMessage("距离测量工具已禁用")
+    
+    def clear_measurement(self):
+        """清除当前测量线和文本"""
+        if self.measure_line and self.measure_line.scene():
+            self.image_viewer.scene().removeItem(self.measure_line)
+            self.measure_line = None
+        
+        if self.measure_text and self.measure_text.scene():
+            self.image_viewer.scene().removeItem(self.measure_text)
+            self.measure_text = None
+        
+        self.measure_start_point = None
+        self.measure_end_point = None
+    
+    def measure_mouse_press(self, event):
+        """测量工具的鼠标按下事件"""
+        if self.measure_mode:
+            scene_pos = self.image_viewer.mapToScene(event.pos())
+            self.measure_start_point = (scene_pos.x(), scene_pos.y())
+            
+            # 创建新的测量线，初始长度为0
+            self.measure_line = QGraphicsLineItem(
+                self.measure_start_point[0],
+                self.measure_start_point[1],
+                self.measure_start_point[0],
+                self.measure_start_point[1]
+            )
+            
+            # 设置线条样式
+            pen = QPen(Qt.red)
+            pen.setWidth(2)
+            self.measure_line.setPen(pen)
+            
+            # 添加到场景
+            self.image_viewer.scene().addItem(self.measure_line)
+            
+            # 初始化测量文本
+            self.measure_text = QGraphicsTextItem("0 px (0.0 mm)")
+            self.measure_text.setDefaultTextColor(Qt.red)
+            self.measure_text.setPos(self.measure_start_point[0], self.measure_start_point[1] - 20)
+            self.image_viewer.scene().addItem(self.measure_text)
+            
+            # 阻止事件传递
+            event.accept()
+        else:
+            # 使用默认的处理方式
+            QGraphicsView.mousePressEvent(self.image_viewer, event)
+    
+    def measure_mouse_move(self, event):
+        """测量工具的鼠标移动事件"""
+        if self.measure_mode and self.measure_start_point and self.measure_line:
+            scene_pos = self.image_viewer.mapToScene(event.pos())
+            self.measure_end_point = (scene_pos.x(), scene_pos.y())
+            
+            # 更新测量线
+            self.measure_line.setLine(
+                self.measure_start_point[0],
+                self.measure_start_point[1],
+                self.measure_end_point[0],
+                self.measure_end_point[1]
+            )
+            
+            # 计算像素距离
+            pixel_distance = math.sqrt(
+                (self.measure_end_point[0] - self.measure_start_point[0]) ** 2 +
+                (self.measure_end_point[1] - self.measure_start_point[1]) ** 2
+            )
+            
+            # 转换为物理距离（毫米）
+            physical_distance = pixel_distance * self.pixel_scale_mm
+            
+            # 更新测量文本
+            self.measure_text.setPlainText(f"{int(pixel_distance)} px ({physical_distance:.2f} mm)")
+            
+            # 更新文本位置为线条中点上方
+            mid_x = (self.measure_start_point[0] + self.measure_end_point[0]) / 2
+            mid_y = (self.measure_start_point[1] + self.measure_end_point[1]) / 2
+            self.measure_text.setPos(mid_x - 50, mid_y - 20)
+            
+            # 阻止事件传递
+            event.accept()
+        else:
+            # 使用默认的处理方式
+            QGraphicsView.mouseMoveEvent(self.image_viewer, event)
+    
+    def measure_mouse_release(self, event):
+        """测量工具的鼠标释放事件"""
+        if self.measure_mode and self.measure_start_point:
+            scene_pos = self.image_viewer.mapToScene(event.pos())
+            self.measure_end_point = (scene_pos.x(), scene_pos.y())
+            
+            # 计算最终像素距离
+            pixel_distance = math.sqrt(
+                (self.measure_end_point[0] - self.measure_start_point[0]) ** 2 +
+                (self.measure_end_point[1] - self.measure_start_point[1]) ** 2
+            )
+            
+            # 转换为物理距离（毫米）
+            physical_distance = pixel_distance * self.pixel_scale_mm
+            
+            # 更新状态栏显示最终测量结果
+            self.status_bar.showMessage(f"测量结果: {int(pixel_distance)} 像素 ({physical_distance:.2f} mm)")
+            
+            # 阻止事件传递
+            event.accept()
+        else:
+            # 使用默认的处理方式
+            QGraphicsView.mouseReleaseEvent(self.image_viewer, event)
 
 # 添加自定义图像查看器类
 class ZoomableImageViewer(QGraphicsView):
