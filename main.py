@@ -47,7 +47,12 @@ class MainApp(QMainWindow):
 
         # 创建工具栏
         self.toolbar = QToolBar("Main Toolbar")
-        self.addToolBar(self.toolbar)
+        self.toolbar.setMovable(True)  # 允许移动
+        self.toolbar.setFloatable(True)  # 允许浮动
+        self.addToolBar(Qt.TopToolBarArea, self.toolbar)  # 指定工具栏区域为顶部
+        
+        # 添加到视图菜单
+        self.view_menu.addAction(self.toolbar.toggleViewAction())
 
         # 创建标签页
         self.tab_widget = QTabWidget()
@@ -169,8 +174,13 @@ class MainApp(QMainWindow):
         if isinstance(current_tab, SuperResolutionTab):
             # 检查是否有图像
             if current_tab.image is not None:
+                # 清除原始图像标签
                 current_tab.original_image_label.clear()
-                current_tab.reconstructed_image_label.clear()
+                
+                # 使用image_viewer清除SR结果
+                if hasattr(current_tab, 'image_viewer'):
+                    current_tab.image_viewer.scene().clear()
+                
                 # 重置图像变量
                 current_tab.image = None
                 current_tab.sr_result = None
