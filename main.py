@@ -2,10 +2,11 @@ import sys
 import os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QAction, 
-    QTabWidget, QFileDialog, QSplitter, QWidget
+    QTabWidget, QFileDialog, QSplitter, QWidget, QDesktopWidget,
+    QTextBrowser, QVBoxLayout, QDialog
 )
 from PyQt5.QtCore import Qt, QCoreApplication
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont, QIcon, QTextCursor
 
 # 必要的Qt属性设置 - 在应用程序创建前设置
 if __name__ == "__main__":
@@ -19,6 +20,64 @@ from sr import SuperResolutionTab
 from seg import MedSAMTab
 from recons import VTKReconstructionTab
 
+# 帮助对话框类
+class HelpDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("MedImago Help")
+        self.resize(800, 600)  # 设置合适的大小
+        
+        layout = QVBoxLayout(self)
+        self.text_browser = QTextBrowser()
+        self.text_browser.setOpenExternalLinks(True)  # 允许打开外部链接
+        layout.addWidget(self.text_browser)
+        
+        # 加载README内容
+        self.load_readme()
+        
+    def load_readme(self):
+        """加载README.md文件内容"""
+        readme_path = os.path.join("MedSAM", "README.md")
+        if os.path.exists(readme_path):
+            try:
+                with open(readme_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+                    # 简单地将markdown内容转换为HTML
+                    html_content = self.markdown_to_html(content)
+                    self.text_browser.setHtml(html_content)
+                    # 滚动到顶部
+                    cursor = self.text_browser.textCursor()
+                    cursor.setPosition(0)
+                    self.text_browser.setTextCursor(cursor)
+            except Exception as e:
+                self.text_browser.setText(f"Error loading README file: {str(e)}")
+        else:
+            self.text_browser.setText("README file not found.")
+    
+    def markdown_to_html(self, markdown_text):
+        """简单的Markdown到HTML转换"""
+        html = "<html><body style='font-family: Arial; line-height: 1.4;'>"
+        
+        # 处理标题
+        markdown_text = markdown_text.replace("# ", "<h1>").replace(" #", "</h1>")
+        markdown_text = markdown_text.replace("## ", "<h2>").replace(" ##", "</h2>")
+        markdown_text = markdown_text.replace("### ", "<h3>").replace(" ###", "</h3>")
+        
+        # 处理链接 [text](url)
+        import re
+        link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+        markdown_text = re.sub(link_pattern, r'<a href="\2">\1</a>', markdown_text)
+        
+        # 处理代码块
+        markdown_text = markdown_text.replace("```bash", "<pre><code>")
+        markdown_text = markdown_text.replace("```", "</code></pre>")
+        
+        # 替换换行符
+        markdown_text = markdown_text.replace("\n", "<br>")
+        
+        html += markdown_text + "</body></html>"
+        return html
+
 # 主程序
 class MainApp(QMainWindow):
     def __init__(self):
@@ -26,10 +85,12 @@ class MainApp(QMainWindow):
         
         # 基本窗口设置
         self.setWindowTitle("AI 4 Echocardiography_IMRIS")
-        self.setGeometry(100, 100, 1600, 900)
         
-        # 确保窗口正常显示（非最小化）
-        self.setWindowState(Qt.WindowActive)
+        # 设置窗口大小为1920x1080
+        self.resize(1920, 1080)
+        
+        # 将窗口居中显示
+        self.center_window()
 
         # 预加载资源
         self._load_resources()
@@ -63,6 +124,14 @@ class MainApp(QMainWindow):
         
         # 创建标签页
         self.create_tabs()
+    
+    def center_window(self):
+        """将窗口居中显示"""
+        screen = QDesktopWidget().screenGeometry()
+        size = self.geometry()
+        x = (screen.width() - size.width()) // 2
+        y = (screen.height() - size.height()) // 2
+        self.move(max(0, x), max(0, y))
 
     def _load_resources(self):
         """预加载和缓存资源"""
@@ -88,12 +157,18 @@ class MainApp(QMainWindow):
 
         self.open_action.triggered.connect(self.handle_open)
         self.clear_action.triggered.connect(self.handle_clear)
+        self.help_action.triggered.connect(self.show_help)
 
         self.toolbar.addAction(self.open_action)
         self.toolbar.addAction(self.clear_action)
         self.toolbar.addAction(self.measure_action)
         self.toolbar.addAction(self.tool_action)
         self.toolbar.addAction(self.help_action)
+
+    def show_help(self):
+        """显示帮助对话框"""
+        help_dialog = HelpDialog(self)
+        help_dialog.exec_()
 
     def create_tabs(self):
         """创建标签页"""
@@ -128,10 +203,10 @@ class MainApp(QMainWindow):
 
     def on_tab_changed(self, index):
         """处理标签页切换事件"""
-        # 更新工具栏按钮状态
+        # 更新工具栏按钮状态 - 让所有标签页都能使用Clear功能
         current_tab = self.tab_widget.widget(index)
-        self.open_action.setEnabled(isinstance(current_tab, SuperResolutionTab))
-        self.clear_action.setEnabled(isinstance(current_tab, SuperResolutionTab))
+        self.open_action.setEnabled(True)  # 所有标签页都可以打开文件
+        self.clear_action.setEnabled(True)  # 所有标签页都可以清除内容
         
         # 针对VTK重建页面的特殊处理
         if index == 2:  # 3D重建标签页
@@ -165,17 +240,23 @@ class MainApp(QMainWindow):
                     elif ext in ('.png', '.jpg', '.jpeg', '.bmp'):
                         current_tab.load_image(file_path)
                     self.status_bar.showMessage(f"Opened: {file_path}")
+            elif isinstance(current_tab, MedSAMTab):
+                current_tab.load_image()
+            elif isinstance(current_tab, VTKReconstructionTab):
+                current_tab.load_dicom()
         except Exception as e:
             self.status_bar.showMessage(f"Error opening file: {str(e)}")
 
     def handle_clear(self):
-        """处理清除图像动作"""
+        """处理清除图像/模型动作"""
         current_tab = self.tab_widget.widget(self.tab_widget.currentIndex())
+        
+        # 超分辨率标签页
         if isinstance(current_tab, SuperResolutionTab):
             # 检查是否有图像
             if current_tab.image is not None:
                 # 清除原始图像标签
-                current_tab.original_image_label.clear()
+                current_tab.video_label.clear()
                 
                 # 使用image_viewer清除SR结果
                 if hasattr(current_tab, 'image_viewer'):
@@ -189,11 +270,48 @@ class MainApp(QMainWindow):
                 self.status_bar.showMessage("Images cleared")
             else:
                 self.status_bar.showMessage("No image to clear")
+        
+        # 分割标签页
+        elif isinstance(current_tab, MedSAMTab):
+            # 清除分割相关内容
+            if current_tab.img_3c is not None:
+                # 清除场景
+                current_tab.scene.clear()
+                # 重置图像和掩码变量
+                current_tab.img_3c = None
+                current_tab.mask_c = None
+                current_tab.embedding = None
+                current_tab.prev_mask = None
+                # 清除EDV和ESV标签
+                current_tab.edv_label.clear()
+                current_tab.esv_label.clear()
+                current_tab.edv_mask = None
+                current_tab.esv_mask = None
+                # 更新掩码状态
+                current_tab.update_mask_status()
+                self.status_bar.showMessage("Segmentation data cleared")
+            else:
+                self.status_bar.showMessage("No segmentation data to clear")
+        
+        # 3D重建标签页
+        elif isinstance(current_tab, VTKReconstructionTab):
+            # 清除3D重建相关内容
+            if current_tab.reader is not None:
+                # 重置读取器
+                current_tab.reader = None
+                current_tab.current_model = None
+                # 清除渲染器
+                if hasattr(current_tab, 'renderer'):
+                    current_tab.renderer.RemoveAllViewProps()
+                    if hasattr(current_tab.vtk_widget, 'GetRenderWindow'):
+                        current_tab.vtk_widget.GetRenderWindow().Render()
+                self.status_bar.showMessage("3D model cleared")
+            else:
+                self.status_bar.showMessage("No 3D model to clear")
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     main_app = MainApp()
-    main_app.setWindowState(Qt.WindowActive)  # 确保窗口正常显示
     main_app.show()
     sys.exit(app.exec_()) 

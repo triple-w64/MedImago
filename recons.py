@@ -437,7 +437,7 @@ class VTKReconstructionTab(QWidget):
         
         # 默认隐藏MPR参数
         self.mpr_params_group.setVisible(False)
-        
+
         self.start_button = QPushButton("Start Reconstruction")
         self.start_button.clicked.connect(self.start_reconstruction)
         self.start_button.setEnabled(False)  # 初始禁用，直到数据加载完成
@@ -498,7 +498,7 @@ class VTKReconstructionTab(QWidget):
         self.view_tabs.addTab(axial_placeholder, "Axial (XY)")
         self.view_tabs.addTab(coronal_placeholder, "Coronal (XZ)")
         self.view_tabs.addTab(sagittal_placeholder, "Sagittal (YZ)")
-        
+
         # 缓存预设的传输函数以提高性能
         self._cached_transfer_functions = {}
 
@@ -1099,7 +1099,7 @@ class VTKReconstructionTab(QWidget):
         
         # 更新位置滑块的取值范围
         self.mpr_position_slider.setValue(50)  # 重置到中间位置
-    
+
     def start_reconstruction(self):
         if not self.reader:
             self.status_bar.showMessage("Please load DICOM data first!")

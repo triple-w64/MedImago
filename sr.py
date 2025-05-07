@@ -526,6 +526,10 @@ class SuperResolutionTab(QWidget):
 
         scale = self.scale_spinner.value()
         algorithm = self.algo_combo.currentText()
+        
+        # 获取原始图像尺寸
+        orig_h, orig_w = self.image.shape[:2]
+        
         start_time = time.time()
 
         if algorithm in ["EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"]:
@@ -539,11 +543,15 @@ class SuperResolutionTab(QWidget):
         end_time = time.time()
         if sr_image is not None:
             self.sr_result = sr_image  # 存储超分辨率结果
-            # 显示重建结果和图像尺寸
-            h, w = sr_image.shape[:2]
+            # 显示重建结果
             self.display_image(self.original_image_label, sr_image)
+            
+            # 获取重建后的图像尺寸
+            sr_h, sr_w = sr_image.shape[:2]
+            
             elapsed_time = end_time - start_time
-            self.status_bar.showMessage(f"Processing completed in {elapsed_time:.4f} seconds - Image size: {w}x{h}")
+            # 同时显示原始尺寸和重建后的尺寸
+            self.status_bar.showMessage(f"Processing completed in {elapsed_time:.4f} seconds - Original size: {orig_w}x{orig_h}, SR size: {sr_w}x{sr_h}")
             self.save_button.setEnabled(True)  # 启用保存按钮
         else:
             self.status_bar.showMessage("Super-resolution failed!")
@@ -626,7 +634,7 @@ class SuperResolutionTab(QWidget):
                 if self.play_button.isEnabled() == False:  # 如果处于播放状态
                     self.timer.start(30)
         else:
-            self.status_bar.showMessage("没有视频流可以冻结!")
+            self.status_bar.showMessage("没有视频流可以冻结!") 
 
     def on_item_expanded(self, item):
         """处理目录展开事件，加载子目录内容"""
