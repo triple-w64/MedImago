@@ -73,13 +73,13 @@ QStatusBar {
 }
 
 QToolBar {
-    background-color: #2B2B2B;
+    background-color: #EEEEEE;
     border: none;
-    color: #EEEEEE;
+    color: #2B2B2B;
 }
 
 QToolBar QAction {
-    color: #EEEEEE;
+    color: #2B2B2B;
 }
 
 QToolBar QToolButton {

@@ -1,1 +1,1 @@
-toolbar
+Super-Resolution

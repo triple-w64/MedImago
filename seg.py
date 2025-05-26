@@ -10,23 +10,29 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QFileDialog, QFrame, QSplitter, 
     QVBoxLayout, QHBoxLayout, QWidget, QGroupBox, QGraphicsView, 
     QGraphicsScene, QGraphicsEllipseItem, QGraphicsRectItem, QSlider, QLineEdit, QComboBox,
-    QScrollArea, QGridLayout, QFormLayout, QTabWidget
+    QScrollArea, QGridLayout, QFormLayout, QTabWidget, QDockWidget, QTreeWidget, QTreeWidgetItem,
+    QMainWindow
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QEvent, QDir
 from PyQt5.QtGui import QImage, QPixmap, QColor, QPen, QBrush, QPainter
 import time
 
 
 # MedSAM模块
 class MedSAMTab(QWidget):
-    def __init__(self, status_bar):
+    def __init__(self, status_bar, main_window=None):
         super().__init__()
         self.status_bar = status_bar
+        self.main_window = main_window
 
         # 配置MedSAM
         self.SAM_MODEL_TYPE = "vit_b"
-        self.MedSAM_CKPT_PATH = "MedSAM\work_dir\MedSAM\medsam_vit_b.pth"
+        self.MedSAM_CKPT_PATH = os.path.join("MedSAM", "work_dir", "MedSAM", "medsam_vit_b.pth")
         self.MEDSAM_IMG_INPUT_SIZE = 1024
+
+        # 创建用于浮动窗口的内部主窗口
+        self.inner_main_window = QMainWindow(self)
+        self.inner_main_window.setWindowFlags(Qt.Widget)  # 确保它不是顶级窗口
 
         # 图形界面参数
         self.half_point_size = 5
@@ -62,13 +68,28 @@ class MedSAMTab(QWidget):
         self.left_widget = QWidget()
         self.left_layout = QVBoxLayout()
         self.left_widget.setLayout(self.left_layout)
+        
+        # 添加文件浏览区域
+        self.create_file_browser()
+        
+        # 图形视图作为可停靠部件
+        self.view_dock = QDockWidget("图像预览", self.inner_main_window)
+        self.view_dock.setFeatures(QDockWidget.DockWidgetFloatable | QDockWidget.DockWidgetMovable)
+        self.view_dock.setAllowedAreas(Qt.AllDockWidgetAreas)
 
         # 图形视图
         self.view = QGraphicsView()
         self.view.setRenderHint(QPainter.Antialiasing)
         self.scene = QGraphicsScene()
         self.view.setScene(self.scene)
-        self.left_layout.addWidget(self.view)
+        self.view_dock.setWidget(self.view)
+        
+        # 添加到内部主窗口
+        self.inner_main_window.setCentralWidget(QWidget())  # 需要一个中央部件
+        self.inner_main_window.addDockWidget(Qt.TopDockWidgetArea, self.view_dock)
+        
+        # 添加内部主窗口到左侧布局
+        self.left_layout.addWidget(self.inner_main_window)
 
         # 控制按钮布局
         control_layout = QHBoxLayout()
@@ -247,6 +268,40 @@ class MedSAMTab(QWidget):
         status_label.setAlignment(Qt.AlignCenter)
         self.mask_status_label = status_label
         right_content_layout.addWidget(status_label)
+
+        # 添加分割掩码保存区域
+        mask_save_group = QGroupBox("Mask 保存选项")
+        mask_save_layout = QVBoxLayout(mask_save_group)
+        
+        # 添加保存格式选择
+        format_layout = QHBoxLayout()
+        format_layout.addWidget(QLabel("保存格式:"))
+        self.save_format_combo = QComboBox()
+        self.save_format_combo.addItems(["PNG", "JPEG", "BMP", "DICOM"])
+        format_layout.addWidget(self.save_format_combo)
+        mask_save_layout.addLayout(format_layout)
+        
+        # 添加按钮组
+        save_buttons_layout = QHBoxLayout()
+        
+        self.save_edv_mask_button = QPushButton("保存EDV掩码")
+        self.save_edv_mask_button.clicked.connect(lambda: self.save_specific_mask("EDV"))
+        
+        self.save_esv_mask_button = QPushButton("保存ESV掩码")
+        self.save_esv_mask_button.clicked.connect(lambda: self.save_specific_mask("ESV"))
+        
+        save_buttons_layout.addWidget(self.save_edv_mask_button)
+        save_buttons_layout.addWidget(self.save_esv_mask_button)
+        
+        mask_save_layout.addLayout(save_buttons_layout)
+        
+        # 添加保存当前编辑中的掩码按钮
+        self.save_current_mask_button = QPushButton("保存当前编辑中掩码")
+        self.save_current_mask_button.clicked.connect(self.save_mask)
+        mask_save_layout.addWidget(self.save_current_mask_button)
+        
+        # 添加到右侧内容布局
+        right_content_layout.addWidget(mask_save_group)
         
         # 添加到右侧布局
         self.right_layout.addWidget(right_content)
@@ -274,14 +329,336 @@ class MedSAMTab(QWidget):
 
         # 加载模型
         print("Loading MedSAM model...")
-        self.medsam_model = sam_model_registry[self.SAM_MODEL_TYPE](checkpoint=self.MedSAM_CKPT_PATH).to(self.device)
-        self.medsam_model.eval()
-        print("MedSAM model loaded successfully!")
+        try:
+            self.medsam_model = sam_model_registry[self.SAM_MODEL_TYPE](checkpoint=self.MedSAM_CKPT_PATH).to(self.device)
+            self.medsam_model.eval()
+            print("MedSAM model loaded successfully!")
+        except Exception as e:
+            print(f"Error loading MedSAM model: {str(e)}")
+            self.status_bar.showMessage(f"Error loading MedSAM model: {str(e)}")
 
-        # 连接鼠标事件到视图
-        self.view.mousePressEvent = self.mouse_press
-        self.view.mouseMoveEvent = self.mouse_move
-        self.view.mouseReleaseEvent = self.mouse_release
+        # 自定义视图的事件处理
+        self.view.viewport().installEventFilter(self)
+
+    def create_file_browser(self):
+        """创建文件浏览器组件"""
+        # 创建文件浏览器的浮动窗口
+        file_dock = QDockWidget("文件浏览器", self.inner_main_window)
+        file_dock.setFeatures(QDockWidget.DockWidgetFloatable | QDockWidget.DockWidgetMovable)
+        file_dock.setAllowedAreas(Qt.AllDockWidgetAreas)
+        
+        # 创建文件浏览器容器和布局
+        file_container = QWidget()
+        file_layout = QVBoxLayout(file_container)
+        
+        # 创建树形文件浏览器
+        self.file_tree = QTreeWidget()
+        self.file_tree.setHeaderLabel("文件")
+        self.file_tree.itemDoubleClicked.connect(self.open_selected_file)
+        
+        # 添加按钮
+        button_layout = QHBoxLayout()
+        
+        load_folder_btn = QPushButton("加载文件夹")
+        load_folder_btn.clicked.connect(self.load_folder)
+        
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.clicked.connect(self.refresh_file_tree)
+        
+        button_layout.addWidget(load_folder_btn)
+        button_layout.addWidget(refresh_btn)
+        
+        # 添加到布局
+        file_layout.addWidget(self.file_tree)
+        file_layout.addLayout(button_layout)
+        
+        # 设置文件浏览器容器为dock部件的内容
+        file_dock.setWidget(file_container)
+        
+        # 添加到内部主窗口的侧边
+        self.inner_main_window.addDockWidget(Qt.LeftDockWidgetArea, file_dock)
+
+    def load_folder(self):
+        """加载文件夹并创建树形结构"""
+        folder_path = QFileDialog.getExistingDirectory(self, "选择文件夹")
+        if not folder_path:
+            return
+            
+        self.file_tree.clear()
+        root = QTreeWidgetItem(self.file_tree, [os.path.basename(folder_path)])
+        root.setData(0, Qt.UserRole, folder_path)
+        
+        # 添加文件夹内容
+        self._add_directory_contents(root, folder_path)
+        root.setExpanded(True)
+        
+    def _add_directory_contents(self, parent_item, parent_path):
+        """添加文件夹内容到树形结构"""
+        try:
+            items = os.listdir(parent_path)
+            
+            # 先收集目录和文件
+            dir_items = []
+            file_items = []
+            
+            for item in items:
+                if item.startswith('.'):  # 跳过隐藏文件
+                    continue
+                    
+                full_path = os.path.join(parent_path, item)
+                if os.path.isdir(full_path):
+                    dir_item = QTreeWidgetItem(None, [item])
+                    dir_item.setData(0, Qt.UserRole, full_path)
+                    dir_items.append((dir_item, full_path))
+                # 只显示图像文件
+                elif item.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.dicom', '.dcm')):
+                    file_item = QTreeWidgetItem(None, [item])
+                    file_item.setData(0, Qt.UserRole, full_path)
+                    file_items.append(file_item)
+            
+            # 添加目录
+            for dir_item, full_path in dir_items:
+                parent_item.addChild(dir_item)
+                dir_item.setChildIndicatorPolicy(QTreeWidgetItem.ShowIndicator)
+            
+            # 添加文件
+            for file_item in file_items:
+                parent_item.addChild(file_item)
+                
+        except Exception as e:
+            self.status_bar.showMessage(f"加载文件夹内容时出错: {str(e)}")
+    
+    def refresh_file_tree(self):
+        """刷新文件树"""
+        # 保存当前选择的文件夹路径
+        current_root = None
+        if self.file_tree.topLevelItemCount() > 0:
+            root_item = self.file_tree.topLevelItem(0)
+            current_root = root_item.data(0, Qt.UserRole)
+            
+        if current_root:
+            self.file_tree.clear()
+            root = QTreeWidgetItem(self.file_tree, [os.path.basename(current_root)])
+            root.setData(0, Qt.UserRole, current_root)
+            
+            # 添加文件夹内容
+            self._add_directory_contents(root, current_root)
+            root.setExpanded(True)
+
+    def open_selected_file(self, item):
+        """打开选中的文件"""
+        file_path = item.data(0, Qt.UserRole)
+        if os.path.isfile(file_path):
+            if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
+                self.load_specific_image(file_path)
+            elif file_path.lower().endswith(('.dicom', '.dcm')):
+                # 处理DICOM文件
+                self.status_bar.showMessage("正在加载DICOM文件...")
+                # DICOM处理逻辑可以在这里添加
+            else:
+                self.status_bar.showMessage("不支持的文件类型")
+        else:
+            # 如果是目录，展开它
+            item.setExpanded(not item.isExpanded())
+            
+            # 如果是首次展开，加载内容
+            if item.childCount() == 0:
+                self._add_directory_contents(item, file_path)
+                
+    def load_specific_image(self, file_path):
+        """加载指定路径的图像"""
+        try:
+            self.image_path = file_path
+            self.bg_img = cv2.imread(file_path)
+            if self.bg_img is None:
+                self.status_bar.showMessage("无法加载图像!")
+                return
+
+            # 保存RGB格式的图像
+            self.img_3c = cv2.cvtColor(self.bg_img, cv2.COLOR_BGR2RGB)
+
+            # 初始化mask
+            H, W, _ = self.img_3c.shape
+            self.mask_c = np.zeros((H, W, 3), dtype=np.uint8)
+
+            # 计算图像嵌入并记录时间
+            embedding_result = self.get_embeddings(self.bg_img)
+            self.embedding = embedding_result[0]  # 获取embedding
+            elapsed_time = embedding_result[1]  # 获取计算时间
+
+            # 显示图像
+            self.scene.clear()
+            pixmap = self.np2pixmap(self.img_3c)
+            self.scene.addPixmap(pixmap)
+            self.view.setSceneRect(0, 0, W, H)
+            self.status_bar.showMessage(f"图像加载成功: {os.path.basename(file_path)}, 嵌入计算用时: {elapsed_time:.2f}秒")
+        except Exception as e:
+            self.status_bar.showMessage(f"加载图像时出错: {str(e)}")
+    
+    def save_specific_mask(self, mask_type):
+        """保存特定类型的掩码"""
+        if mask_type == "EDV" and self.edv_mask is None:
+            self.status_bar.showMessage("没有EDV掩码可保存")
+            return
+            
+        if mask_type == "ESV" and self.esv_mask is None:
+            self.status_bar.showMessage("没有ESV掩码可保存")
+            return
+            
+        # 确定保存文件格式
+        format_text = self.save_format_combo.currentText().lower()
+        if format_text == "dicom":
+            file_filter = "DICOM Files (*.dcm)"
+            default_ext = ".dcm"
+        else:
+            file_filter = f"{format_text.upper()} Files (*.{format_text})"
+            default_ext = f".{format_text}"
+        
+        # 创建默认文件名
+        if self.image_path:
+            base_name = os.path.splitext(os.path.basename(self.image_path))[0]
+            default_name = f"{base_name}_{mask_type}_mask{default_ext}"
+        else:
+            default_name = f"{mask_type.lower()}_mask{default_ext}"
+        
+        # 打开保存对话框
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, f"保存{mask_type}掩码", default_name, file_filter
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # 选择要保存的掩码
+            mask = self.edv_mask if mask_type == "EDV" else self.esv_mask
+            
+            # 保存掩码
+            if format_text == "dicom":
+                # 这里可以添加DICOM保存逻辑
+                self.status_bar.showMessage("DICOM保存功能尚未实现")
+            else:
+                cv2.imwrite(file_path, mask)
+                self.status_bar.showMessage(f"{mask_type}掩码已保存至 {file_path}")
+        except Exception as e:
+            self.status_bar.showMessage(f"保存掩码时出错: {str(e)}")
+
+    def eventFilter(self, obj, event):
+        """处理视图的事件，确保其不受全局工具栏影响"""
+        if obj == self.view.viewport():
+            if event.type() == QEvent.MouseButtonPress:
+                self.mouse_press(event)
+                return True
+            elif event.type() == QEvent.MouseMove:
+                if self.is_mouse_down:
+                    self.mouse_move(event)
+                return False
+            elif event.type() == QEvent.MouseButtonRelease:
+                if self.is_mouse_down:
+                    self.mouse_release(event)
+                    self.is_mouse_down = False
+                return True
+        return super().eventFilter(obj, event)
+
+    def mouse_press(self, event):
+        """鼠标按下事件"""
+        if self.img_3c is None:
+            return
+            
+        self.is_mouse_down = True
+        scene_pos = self.view.mapToScene(event.pos())
+        self.start_pos = (scene_pos.x(), scene_pos.y())
+        
+        # 创建起始点
+        self.start_point = QGraphicsEllipseItem(
+            scene_pos.x() - self.half_point_size,
+            scene_pos.y() - self.half_point_size,
+            self.point_size,
+            self.point_size
+        )
+        self.start_point.setBrush(QBrush(QColor(*self.colors[self.color_idx % len(self.colors)])))
+        self.scene.addItem(self.start_point)
+        
+        # 创建初始矩形
+        self.rect = QGraphicsRectItem(
+            scene_pos.x(), 
+            scene_pos.y(), 
+            1, 1  # 初始大小为1x1
+        )
+        self.rect.setPen(QPen(QColor(*self.colors[self.color_idx % len(self.colors)]), 2))
+        self.scene.addItem(self.rect)
+
+    def mouse_move(self, event):
+        if self.img_3c is None or self.rect is None:
+            return
+
+        scene_pos = self.view.mapToScene(event.pos())
+        self.end_pos = (scene_pos.x(), scene_pos.y())
+
+        # 更新矩形位置和大小
+        x = min(self.start_pos[0], self.end_pos[0])
+        y = min(self.start_pos[1], self.end_pos[1])
+        width = abs(self.end_pos[0] - self.start_pos[0])
+        height = abs(self.end_pos[1] - self.start_pos[1])
+
+        # 安全地更新矩形
+        try:
+            self.rect.setRect(x, y, width, height)
+        except RuntimeError:
+            # 如果矩形已被删除，创建新的
+            self.rect = QGraphicsRectItem(x, y, width, height)
+            self.rect.setPen(QPen(QColor(*self.colors[self.color_idx]), 2))
+            self.scene.addItem(self.rect)
+
+    def mouse_release(self, event):
+        """鼠标释放事件，使用已计算的嵌入进行分割"""
+        if self.rect is None or self.embedding is None:
+            return
+
+        scene_pos = self.view.mapToScene(event.pos())
+        self.end_pos = (scene_pos.x(), scene_pos.y())
+
+        # 计算边界框
+        xmin = min(self.start_pos[0], self.end_pos[0])
+        xmax = max(self.start_pos[0], self.end_pos[0])
+        ymin = min(self.start_pos[1], self.end_pos[1])
+        ymax = max(self.start_pos[1], self.end_pos[1])
+
+        H, W, _ = self.img_3c.shape
+        box_np = np.array([[xmin, ymin, xmax, ymax]])
+        box_1024 = box_np / np.array([W, H, W, H]) * 1024
+
+        # 记录segmentation推理的开始时间
+        seg_start_time = time.time()
+        
+        # 运行MedSAM推理
+        sam_mask = self.medsam_inference(self.embedding, box_1024, H, W)
+        
+        # 计算segmentation推理时间
+        seg_elapsed_time = time.time() - seg_start_time
+
+        # 保存当前mask用于撤销
+        self.prev_mask = self.mask_c.copy() if self.mask_c is not None else None
+
+        # 更新mask
+        if self.mask_c is None:
+            self.mask_c = np.zeros_like(self.img_3c)
+            
+        if sam_mask is not None:
+            self.mask_c[sam_mask != 0] = self.colors[self.color_idx % len(self.colors)]
+            self.color_idx += 1
+
+            # 混合显示
+            bg = Image.fromarray(self.img_3c)
+            mask = Image.fromarray(self.mask_c)
+            img = Image.blend(bg, mask, 0.2)
+
+            # 更新显示
+            self.scene.clear()
+            self.scene.addPixmap(self.np2pixmap(np.array(img)))
+            self.status_bar.showMessage(f"分割完成，推理用时: {seg_elapsed_time:.2f}秒")
+        else:
+            self.status_bar.showMessage("分割失败，请检查模型或重试")
 
     # 添加推理方法
     @torch.no_grad()
@@ -371,52 +748,6 @@ class MedSAMTab(QWidget):
         self.view.setSceneRect(0, 0, W, H)
         self.status_bar.showMessage(f"图像加载成功，嵌入计算用时: {elapsed_time:.2f}秒")
 
-    # 修改mouse_release方法
-    def mouse_release(self, event):
-        """鼠标释放事件，使用已计算的嵌入进行分割"""
-        self.is_mouse_down = False
-        if self.rect is None or self.embedding is None:
-            return
-
-        scene_pos = self.view.mapToScene(event.pos())
-        self.end_pos = (scene_pos.x(), scene_pos.y())
-
-        # 计算边界框
-        xmin = min(self.start_pos[0], self.end_pos[0])
-        xmax = max(self.start_pos[0], self.end_pos[0])
-        ymin = min(self.start_pos[1], self.end_pos[1])
-        ymax = max(self.start_pos[1], self.end_pos[1])
-
-        H, W, _ = self.img_3c.shape
-        box_np = np.array([[xmin, ymin, xmax, ymax]])
-        box_1024 = box_np / np.array([W, H, W, H]) * 1024
-
-        # 记录segmentation推理的开始时间
-        seg_start_time = time.time()
-        
-        # 运行MedSAM推理
-        sam_mask = self.medsam_inference(self.embedding, box_1024, H, W)
-        
-        # 计算segmentation推理时间
-        seg_elapsed_time = time.time() - seg_start_time
-
-        # 保存当前mask用于撤销
-        self.prev_mask = self.mask_c.copy()
-
-        # 更新mask
-        self.mask_c[sam_mask != 0] = self.colors[self.color_idx % len(self.colors)]
-        self.color_idx += 1
-
-        # 混合显示
-        bg = Image.fromarray(self.img_3c)
-        mask = Image.fromarray(self.mask_c)
-        img = Image.blend(bg, mask, 0.2)
-
-        # 更新显示
-        self.scene.clear()
-        self.scene.addPixmap(self.np2pixmap(np.array(img)))
-        self.status_bar.showMessage(f"分割完成，推理用时: {seg_elapsed_time:.2f}秒")
-
     def save_mask(self):
         """保存分割掩码"""
         if self.mask_c is None:
@@ -438,56 +769,6 @@ class MedSAMTab(QWidget):
                 self.status_bar.showMessage(f"Mask saved to {file_path}")
             except Exception as e:
                 self.status_bar.showMessage(f"Error saving file: {str(e)}")
-
-    def mouse_press(self, event):
-        """鼠标按下事件"""
-        if self.img_3c is None:
-            return
-            
-        scene_pos = self.view.mapToScene(event.pos())
-        self.is_mouse_down = True
-        self.start_pos = (scene_pos.x(), scene_pos.y())
-        
-        # 创建起始点
-        self.start_point = QGraphicsEllipseItem(
-            scene_pos.x() - self.half_point_size,
-            scene_pos.y() - self.half_point_size,
-            self.point_size,
-            self.point_size
-        )
-        self.start_point.setBrush(QBrush(QColor(*self.colors[self.color_idx % len(self.colors)])))
-        self.scene.addItem(self.start_point)
-        
-        # 创建初始矩形
-        self.rect = QGraphicsRectItem(
-            scene_pos.x(), 
-            scene_pos.y(), 
-            1, 1  # 初始大小为1x1
-        )
-        self.rect.setPen(QPen(QColor(*self.colors[self.color_idx % len(self.colors)]), 2))
-        self.scene.addItem(self.rect)
-
-    def mouse_move(self, event):
-        if not self.is_mouse_down or self.rect is None:
-            return
-
-        scene_pos = self.view.mapToScene(event.pos())
-        self.end_pos = (scene_pos.x(), scene_pos.y())
-
-        # 更新矩形位置和大小
-        x = min(self.start_pos[0], self.end_pos[0])
-        y = min(self.start_pos[1], self.end_pos[1])
-        width = abs(self.end_pos[0] - self.start_pos[0])
-        height = abs(self.end_pos[1] - self.start_pos[1])
-
-        # 安全地更新矩形
-        try:
-            self.rect.setRect(x, y, width, height)
-        except RuntimeError:
-            # 如果矩形已被删除，创建新的
-            self.rect = QGraphicsRectItem(x, y, width, height)
-            self.rect.setPen(QPen(QColor(*self.colors[self.color_idx]), 2))
-            self.scene.addItem(self.rect)
 
     def undo(self):
         if self.prev_mask is None:
@@ -793,3 +1074,8 @@ class MedSAMTab(QWidget):
             
         # 更新状态栏显示详细结果
         self.status_bar.showMessage(result_message) 
+
+    def set_file_tree(self, file_tree):
+        """设置共享的文件树"""
+        self.file_tree = file_tree
+        # 如果需要，可以在这里更新UI或其他相关操作 

@@ -8,11 +8,109 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QWidget, QComboBox, QSpinBox,
     QTreeWidget, QTreeWidgetItem, QGroupBox, QProgressBar,
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QScrollArea,
-    QGraphicsLineItem, QGraphicsTextItem
+    QGraphicsLineItem, QGraphicsTextItem, QApplication, QDialog,
+    QSlider, QGridLayout, QDialogButtonBox, QRubberBand, QDockWidget,
+    QMainWindow
 )
-from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF
-from PyQt5.QtGui import QImage, QPixmap, QFont, QWheelEvent, QCursor, QPainter, QBrush, QColor, QPen
+from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF, QRect, QSize
+from PyQt5.QtGui import QImage, QPixmap, QFont, QWheelEvent, QCursor, QPainter, QBrush, QColor, QPen, QKeySequence
+from PyQt5.QtWidgets import QShortcut
 
+# 添加窗位窗宽调整对话框
+class WindowLevelDialog(QDialog):
+    def __init__(self, parent=None, window_level=128, window_width=255):
+        super().__init__(parent)
+        self.setWindowTitle("窗位窗宽调整")
+        self.setMinimumWidth(350)
+        
+        layout = QGridLayout(self)
+        
+        # 窗位滑块
+        layout.addWidget(QLabel("窗位:"), 0, 0)
+        self.level_slider = QSlider(Qt.Horizontal)
+        self.level_slider.setMinimum(0)
+        self.level_slider.setMaximum(255)
+        self.level_slider.setValue(window_level)
+        layout.addWidget(self.level_slider, 0, 1)
+        self.level_value = QLabel(str(window_level))
+        layout.addWidget(self.level_value, 0, 2)
+        
+        # 窗宽滑块
+        layout.addWidget(QLabel("窗宽:"), 1, 0)
+        self.width_slider = QSlider(Qt.Horizontal)
+        self.width_slider.setMinimum(1)
+        self.width_slider.setMaximum(255)
+        self.width_slider.setValue(window_width)
+        layout.addWidget(self.width_slider, 1, 1)
+        self.width_value = QLabel(str(window_width))
+        layout.addWidget(self.width_value, 1, 2)
+        
+        # 添加按钮
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(self.button_box, 2, 0, 1, 3)
+        
+        # 连接信号
+        self.level_slider.valueChanged.connect(self.update_level_value)
+        self.width_slider.valueChanged.connect(self.update_width_value)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        
+    def update_level_value(self, value):
+        self.level_value.setText(str(value))
+        
+    def update_width_value(self, value):
+        self.width_value.setText(str(value))
+        
+    def get_values(self):
+        return self.level_slider.value(), self.width_slider.value()
+
+# 添加亮度对比度调整对话框
+class BrightnessContrastDialog(QDialog):
+    def __init__(self, parent=None, brightness=0, contrast=0):
+        super().__init__(parent)
+        self.setWindowTitle("亮度/对比度调整")
+        self.setMinimumWidth(350)
+        
+        layout = QGridLayout(self)
+        
+        # 亮度滑块
+        layout.addWidget(QLabel("亮度:"), 0, 0)
+        self.brightness_slider = QSlider(Qt.Horizontal)
+        self.brightness_slider.setMinimum(-100)
+        self.brightness_slider.setMaximum(100)
+        self.brightness_slider.setValue(brightness)
+        layout.addWidget(self.brightness_slider, 0, 1)
+        self.brightness_value = QLabel(str(brightness))
+        layout.addWidget(self.brightness_value, 0, 2)
+        
+        # 对比度滑块
+        layout.addWidget(QLabel("对比度:"), 1, 0)
+        self.contrast_slider = QSlider(Qt.Horizontal)
+        self.contrast_slider.setMinimum(-100)
+        self.contrast_slider.setMaximum(100)
+        self.contrast_slider.setValue(contrast)
+        layout.addWidget(self.contrast_slider, 1, 1)
+        self.contrast_value = QLabel(str(contrast))
+        layout.addWidget(self.contrast_value, 1, 2)
+        
+        # 添加按钮
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(self.button_box, 2, 0, 1, 3)
+        
+        # 连接信号
+        self.brightness_slider.valueChanged.connect(self.update_brightness_value)
+        self.contrast_slider.valueChanged.connect(self.update_contrast_value)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        
+    def update_brightness_value(self, value):
+        self.brightness_value.setText(str(value))
+        
+    def update_contrast_value(self, value):
+        self.contrast_value.setText(str(value))
+        
+    def get_values(self):
+        return self.brightness_slider.value(), self.contrast_slider.value()
 
 # 超分辨率模块
 class SuperResolutionTab(QWidget):
@@ -28,6 +126,19 @@ class SuperResolutionTab(QWidget):
         self.measure_line = None
         self.measure_text = None
         self.pixel_scale_mm = 0.2  # 默认像素比例尺，单位为mm/pixel
+        self.measurement_lines = []  # 存储所有测量线
+        self.measurement_texts = []  # 存储所有测量文本
+        
+        # 添加量角器相关变量
+        self.angle_mode = False  # 量角器模式标志
+        self.angle_lines = []  # 存储角度线
+        self.angle_texts = []  # 存储角度文本
+        self.angle_points = []  # 存储角度的顶点和两个端点
+        self.angle_current_line = 0  # 当前正在绘制的角度线（0或1）
+        
+        # 添加指针和手型工具相关变量
+        self.pointer_mode = True  # 默认为指针模式
+        self.hand_mode = False  # 手型工具模式
         
         # 添加视频相关的初始化
         self.video_capture = None
@@ -40,33 +151,154 @@ class SuperResolutionTab(QWidget):
         # 主布局改为水平布局
         self.main_layout = QHBoxLayout(self)
         splitter = QSplitter(Qt.Horizontal)
-        # 创建左中右三个部分的容器
-        self.left_container = QWidget()
+        # 创建中右两个部分的容器
         self.center_container = QWidget()
         self.right_container = QWidget()
         
         # 设置布局
-        self.left_layout = QVBoxLayout(self.left_container)
         self.center_layout = QVBoxLayout(self.center_container)
         self.right_layout = QVBoxLayout(self.right_container)
         
         # 创建组件
-        self.create_file_manager()
         self.create_video_player()
         self.create_sr_controls()
         
-        # 将三个容器添加到 QSplitter
-        splitter.addWidget(self.left_container)
+        # 将两个容器添加到 QSplitter
         splitter.addWidget(self.center_container)
         splitter.addWidget(self.right_container)
         
         # 设置拉伸因子(可自由调整)
-        splitter.setStretchFactor(0, 2)  # 文件管理器
-        splitter.setStretchFactor(1, 4)  # 视频播放器
-        splitter.setStretchFactor(2, 4)  # SR控制
+        splitter.setStretchFactor(0, 1)  # 视频播放器
+        splitter.setStretchFactor(1, 1)  # SR控制
 
         # 添加到主布局
         self.main_layout.addWidget(splitter)
+
+        # 设置快捷键
+        self.setup_shortcuts()
+    
+    def set_file_tree(self, file_tree):
+        """设置共享的文件树"""
+        self.file_tree = file_tree
+
+    def setup_shortcuts(self):
+        """设置快捷键"""
+        # Ctrl+Z 撤销上一步测量
+        self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        self.undo_shortcut.activated.connect(self.undo_last_measurement)
+        
+        # Ctrl+1 切换到指针工具
+        self.pointer_shortcut = QShortcut(QKeySequence("Ctrl+1"), self)
+        self.pointer_shortcut.activated.connect(lambda: self.switch_tool("pointer"))
+        
+        # Ctrl+2 切换到手型工具
+        self.hand_shortcut = QShortcut(QKeySequence("Ctrl+2"), self)
+        self.hand_shortcut.activated.connect(lambda: self.switch_tool("hand"))
+        
+        # Ctrl+3 切换到距离测量工具
+        self.distance_shortcut = QShortcut(QKeySequence("Ctrl+3"), self)
+        self.distance_shortcut.activated.connect(lambda: self.switch_tool("distance"))
+        
+        # Ctrl+4 切换到角度测量工具
+        self.angle_shortcut = QShortcut(QKeySequence("Ctrl+4"), self)
+        self.angle_shortcut.activated.connect(lambda: self.switch_tool("angle"))
+        
+        # Ctrl+W 窗位窗宽调整
+        self.window_level_shortcut = QShortcut(QKeySequence("Ctrl+W"), self)
+        self.window_level_shortcut.activated.connect(self.adjust_window_level)
+        
+        # Ctrl+B 亮度对比度调整
+        self.brightness_contrast_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        self.brightness_contrast_shortcut.activated.connect(self.adjust_brightness_contrast)
+        
+        # Ctrl+R ROI提取
+        self.roi_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        self.roi_shortcut.activated.connect(self.extract_roi)
+
+    def switch_tool(self, tool_name):
+        """切换工具"""
+        # 先禁用所有工具
+        self.pointer_mode = False
+        self.hand_mode = False
+        self.measure_mode = False
+        self.angle_mode = False
+        
+        # 手动禁用测量工具
+        if hasattr(self, 'enable_distance_measure'):
+            self.enable_distance_measure(False)
+        if hasattr(self, 'enable_angle_measure'):
+            self.enable_angle_measure(False)
+        
+        # 根据选择激活相应工具
+        if tool_name == "pointer":
+            self.pointer_mode = True
+            if hasattr(self.image_viewer, 'set_tool'):
+                self.image_viewer.set_tool("pointer")
+            self.status_bar.showMessage("已切换到指针工具")
+        elif tool_name == "hand":
+            self.hand_mode = True
+            if hasattr(self.image_viewer, 'set_tool'):
+                self.image_viewer.set_tool("hand")
+            self.status_bar.showMessage("已切换到手型工具")
+        elif tool_name == "distance":
+            self.enable_distance_measure(True)
+            # 状态栏消息已在enable_distance_measure中设置
+        elif tool_name == "angle":
+            self.enable_angle_measure(True)
+            # 状态栏消息已在enable_angle_measure中设置
+        
+        # 更新工具栏按钮选中状态（如果存在）
+        if hasattr(self.main_window, 'pointer_action'):
+            self.main_window.pointer_action.setChecked(self.pointer_mode)
+        if hasattr(self.main_window, 'hand_action'):
+            self.main_window.hand_action.setChecked(self.hand_mode)
+        if hasattr(self.main_window, 'distance_measure_action'):
+            self.main_window.distance_measure_action.setChecked(self.measure_mode)
+        if hasattr(self.main_window, 'angle_measure_action'):
+            self.main_window.angle_measure_action.setChecked(self.angle_mode)
+
+    def undo_last_measurement(self):
+        """撤销上一步测量"""
+        # 检查是否有测量可以撤销
+        if self.measurement_lines and self.measurement_texts:
+            # 移除最后一个测量线和文本
+            last_line = self.measurement_lines.pop()
+            last_text = self.measurement_texts.pop()
+            
+            scene = self.image_viewer.scene()
+            if scene:
+                if last_line and last_line.scene() == scene:
+                    scene.removeItem(last_line)
+                if last_text and last_text.scene() == scene:
+                    scene.removeItem(last_text)
+                
+                # 强制刷新视图
+                self.image_viewer.viewport().update()
+                self.status_bar.showMessage("已撤销上一步测量")
+        elif self.angle_lines and self.angle_texts:
+            # 移除最后一组角度线和文本
+            # 通常有两条线和一个文本
+            if len(self.angle_lines) >= 2:
+                last_lines = self.angle_lines[-2:]
+                self.angle_lines = self.angle_lines[:-2]
+                
+                scene = self.image_viewer.scene()
+                if scene:
+                    for line in last_lines:
+                        if line and line.scene() == scene:
+                            scene.removeItem(line)
+            
+            if self.angle_texts:
+                last_text = self.angle_texts.pop()
+                scene = self.image_viewer.scene()
+                if scene and last_text and last_text.scene() == scene:
+                    scene.removeItem(last_text)
+            
+            # 强制刷新视图
+            self.image_viewer.viewport().update()
+            self.status_bar.showMessage("已撤销上一步角度测量")
+        else:
+            self.status_bar.showMessage("没有可撤销的测量")
 
     def create_file_manager(self):
         """创建文件管理器"""
@@ -315,7 +547,7 @@ class SuperResolutionTab(QWidget):
         
         # 图像显示组
         self.image_display_group = QGroupBox("图像显示")
-        self.image_display_layout = QVBoxLayout()  # 改为垂直布局
+        self.image_display_layout = QVBoxLayout(self.image_display_group)
 
         # 创建自定义的可缩放图像查看器
         self.image_viewer = ZoomableImageViewer()
@@ -324,11 +556,9 @@ class SuperResolutionTab(QWidget):
         self.original_image_label = QLabel()
         self.original_image_label.setVisible(False)
 
-        # 添加到布局
+        # 直接添加到布局，不使用dock widget
         self.image_display_layout.addWidget(self.image_viewer)
         self.image_display_layout.addWidget(self.original_image_label)
-        
-        self.image_display_group.setLayout(self.image_display_layout)
         
         # 控制组
         self.controls_group = QGroupBox("超分辨率控制")
@@ -543,7 +773,11 @@ class SuperResolutionTab(QWidget):
         start_time = time.time()
 
         if algorithm in ["EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"]:
-            self.load_dnn_sr_model(algorithm, scale)
+            model_loaded = self.load_dnn_sr_model(algorithm, scale)
+            if not model_loaded:
+                self.status_bar.showMessage(f"无法加载 {algorithm} 模型，请检查模型文件是否存在")
+                return
+                
             sr_image = self.run_dnn_super_resolution()
         elif algorithm in ["Bilinear", "Bicubic"]:
             sr_image = self.run_opencv_interpolation(algorithm, scale)
@@ -586,23 +820,74 @@ class SuperResolutionTab(QWidget):
         
         model_path = model_paths[method]
         
+        # 显示模型路径，便于调试
+        full_path = os.path.join(os.getcwd(), model_path)
+        self.status_bar.showMessage(f"正在加载模型: {full_path}")
+        
+        if not os.path.exists(full_path):
+            error_msg = f"错误: 模型文件不存在: {full_path}"
+            self.status_bar.showMessage(error_msg)
+            print(error_msg)
+            return False
+        
         # 检查模型是否已经加载过，避免重复加载相同的模型
         if hasattr(self, '_current_model') and self._current_model == (method, scale):
-            return
+            return True
             
         # 记录当前加载的模型
         self._current_model = (method, scale)
             
+        try:
         # 加载模型
-        self.sr_model = cv2.dnn_superres.DnnSuperResImpl_create()
-        self.sr_model.readModel(model_path)
-        self.sr_model.setModel(method.lower(), scale)
+            import cv2.dnn_superres
+            self.sr_model = cv2.dnn_superres.DnnSuperResImpl_create()
+            self.sr_model.readModel(full_path)
+            self.sr_model.setModel(method.lower(), scale)
+            self.status_bar.showMessage(f"模型加载成功: {method} x{scale}")
+            return True
+        except Exception as e:
+            error_msg = f"模型加载错误: {str(e)}"
+            self.status_bar.showMessage(error_msg)
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            return False
         
     def run_dnn_super_resolution(self):
         try:
-            return self.sr_model.upsample(self.image)
+            # 检查图像通道数
+            if self.image is None:
+                self.status_bar.showMessage("没有图像可处理")
+                return None
+                
+            # 确保图像是3通道的，但保留原始图像类型信息
+            input_image = self.image.copy()
+            original_is_grayscale = False
+            
+            if len(input_image.shape) == 2:
+                # 单通道灰度图
+                original_is_grayscale = True
+                input_image = cv2.cvtColor(input_image, cv2.COLOR_GRAY2BGR)
+            elif len(input_image.shape) == 3 and input_image.shape[2] == 1:
+                # 单通道灰度图（带通道维度）
+                original_is_grayscale = True
+                input_image = cv2.cvtColor(input_image.squeeze(2), cv2.COLOR_GRAY2BGR)
+            elif input_image.shape[2] == 4:
+                # 将RGBA图像转换为BGR
+                input_image = cv2.cvtColor(input_image, cv2.COLOR_RGBA2BGR)
+            
+            # 调用SR模型
+            result = self.sr_model.upsample(input_image)
+            
+            # 如果原图是灰度图，将结果转回灰度
+            if original_is_grayscale:
+                result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+                
+            return result
         except Exception as e:
-            self.status_bar.showMessage(f"Error: {e}")
+            self.status_bar.showMessage(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def save_result(self):
@@ -670,12 +955,21 @@ class SuperResolutionTab(QWidget):
         """启用或禁用距离测量功能"""
         self.measure_mode = enable
         
-        if enable:
-            # 保存原始的鼠标事件处理器
-            self._original_mouse_press = self.image_viewer.mousePressEvent
-            self._original_mouse_move = self.image_viewer.mouseMoveEvent
-            self._original_mouse_release = self.image_viewer.mouseReleaseEvent
+        # 确保有图像查看器
+        if not hasattr(self, 'image_viewer') or not self.image_viewer:
+            self.status_bar.showMessage("图像查看器未初始化，无法启用测量工具")
+            return
             
+        # 确保图像查看器有场景
+        if not self.image_viewer.scene():
+            self.status_bar.showMessage("没有图像可以测量")
+            return
+        
+        # 禁用角度测量
+        if enable:
+            self.angle_mode = False
+        
+        if enable:
             # 连接图像查看器鼠标事件
             self.image_viewer.mousePressEvent = self.measure_mouse_press
             self.image_viewer.mouseMoveEvent = self.measure_mouse_move
@@ -684,41 +978,87 @@ class SuperResolutionTab(QWidget):
             # 显示提示信息
             self.status_bar.showMessage("距离测量工具已激活：在图像上点击并拖动以测量距离")
             
-            # 清除之前的测量线和文本
-            self.clear_measurement()
+            # 重置当前测量线变量，但不清除之前的线
+            self.measure_line = None
+            self.measure_text = None
+            self.measure_start_point = None
+            self.measure_end_point = None
         else:
             # 还原图像查看器默认鼠标事件
-            if hasattr(self, '_original_mouse_press'):
-                self.image_viewer.mousePressEvent = self._original_mouse_press
-                self.image_viewer.mouseMoveEvent = self._original_mouse_move
-                self.image_viewer.mouseReleaseEvent = self._original_mouse_release
+            # 恢复原始事件处理方法
+            if hasattr(self.image_viewer, 'set_tool'):
+                # 如果有指针模式，则恢复为指针模式
+                if self.pointer_mode:
+                    self.image_viewer.set_tool("pointer")
+                elif self.hand_mode:
+                    self.image_viewer.set_tool("hand")
             else:
-                # 如果没有保存原始事件处理器，创建新的ZoomableImageViewer实例来获取默认事件
-                default_viewer = ZoomableImageViewer()
-                self.image_viewer.mousePressEvent = default_viewer.mousePressEvent
-                self.image_viewer.mouseMoveEvent = default_viewer.mouseMoveEvent
-                self.image_viewer.mouseReleaseEvent = default_viewer.mouseReleaseEvent
+                    # 默认恢复到指针模式
+                    self.image_viewer.set_tool("pointer")
             
-            # 清除测量
-            self.clear_measurement()
+            # 取消当前进行中的测量
+            if self.measure_line and self.measure_line.scene():
+                self.image_viewer.scene().removeItem(self.measure_line)
+                self.measure_line = None
+                
+            if self.measure_text and self.measure_text.scene():
+                self.image_viewer.scene().removeItem(self.measure_text)
+                self.measure_text = None
+                
+            self.measure_start_point = None
+            self.measure_end_point = None
+            
             self.status_bar.showMessage("距离测量工具已禁用")
     
     def clear_measurement(self):
-        """清除当前测量线和文本"""
-        if self.measure_line and self.measure_line.scene():
-            self.image_viewer.scene().removeItem(self.measure_line)
-            self.measure_line = None
+        """清除所有测量线和文本"""
+        scene = self.image_viewer.scene()
+        if not scene:
+            return
         
-        if self.measure_text and self.measure_text.scene():
-            self.image_viewer.scene().removeItem(self.measure_text)
-            self.measure_text = None
+        # 清除距离测量
+        for line in self.measurement_lines:
+            if line and line.scene() == scene:
+                scene.removeItem(line)
         
+        for text in self.measurement_texts:
+            if text and text.scene() == scene:
+                scene.removeItem(text)
+        
+        self.measurement_lines = []
+        self.measurement_texts = []
+        self.measure_line = None
+        self.measure_text = None
         self.measure_start_point = None
         self.measure_end_point = None
+        
+        # 清除角度测量
+        for line in self.angle_lines:
+            if line and line.scene() == scene:
+                scene.removeItem(line)
+        
+        for text in self.angle_texts:
+            if text and text.scene() == scene:
+                scene.removeItem(text)
+        
+        self.angle_lines = []
+        self.angle_texts = []
+        self.angle_points = []
+        self.angle_current_line = 0
+        
+        # 强制更新视图
+        self.image_viewer.viewport().update()
+        
+        self.status_bar.showMessage("已清除所有测量")
     
     def measure_mouse_press(self, event):
         """测量工具的鼠标按下事件"""
         if self.measure_mode:
+            # 确保图像查看器已经准备好并且有场景
+            if not self.image_viewer or not self.image_viewer.scene():
+                self.status_bar.showMessage("无法进行测量：图像查看器未准备好")
+                return
+                
             scene_pos = self.image_viewer.mapToScene(event.pos())
             self.measure_start_point = (scene_pos.x(), scene_pos.y())
             
@@ -746,13 +1086,17 @@ class SuperResolutionTab(QWidget):
             
             # 阻止事件传递
             event.accept()
-        else:
+            return
             # 使用默认的处理方式
-            QGraphicsView.mousePressEvent(self.image_viewer, event)
+        super(type(self.image_viewer), self.image_viewer).mousePressEvent(event)
     
     def measure_mouse_move(self, event):
         """测量工具的鼠标移动事件"""
         if self.measure_mode and self.measure_start_point and self.measure_line:
+            # 确保图像查看器和场景存在
+            if not self.image_viewer or not self.image_viewer.scene():
+                return
+                
             scene_pos = self.image_viewer.mapToScene(event.pos())
             self.measure_end_point = (scene_pos.x(), scene_pos.y())
             
@@ -781,15 +1125,22 @@ class SuperResolutionTab(QWidget):
             mid_y = (self.measure_start_point[1] + self.measure_end_point[1]) / 2
             self.measure_text.setPos(mid_x - 50, mid_y - 20)
             
+            # 强制刷新场景
+            self.image_viewer.viewport().update()
+            
             # 阻止事件传递
             event.accept()
-        else:
+            return
             # 使用默认的处理方式
-            QGraphicsView.mouseMoveEvent(self.image_viewer, event)
+        super(type(self.image_viewer), self.image_viewer).mouseMoveEvent(event)
     
     def measure_mouse_release(self, event):
         """测量工具的鼠标释放事件"""
-        if self.measure_mode and self.measure_start_point:
+        if self.measure_mode and self.measure_start_point and self.measure_line:
+            # 确保图像查看器和场景存在
+            if not self.image_viewer or not self.image_viewer.scene():
+                return
+                
             scene_pos = self.image_viewer.mapToScene(event.pos())
             self.measure_end_point = (scene_pos.x(), scene_pos.y())
             
@@ -805,11 +1156,630 @@ class SuperResolutionTab(QWidget):
             # 更新状态栏显示最终测量结果
             self.status_bar.showMessage(f"测量结果: {int(pixel_distance)} 像素 ({physical_distance:.2f} mm)")
             
+            # 将当前测量线和文本添加到列表中
+            if self.measure_line and self.measure_text:
+                self.measurement_lines.append(self.measure_line)
+                self.measurement_texts.append(self.measure_text)
+                
+                # 重置当前测量线和文本，以便下一次测量
+                self.measure_line = None
+                self.measure_text = None
+                self.measure_start_point = None
+                self.measure_end_point = None
+            
+            # 强制刷新场景
+            self.image_viewer.viewport().update()
+            
             # 阻止事件传递
             event.accept()
-        else:
+            return
             # 使用默认的处理方式
-            QGraphicsView.mouseReleaseEvent(self.image_viewer, event)
+        super(type(self.image_viewer), self.image_viewer).mouseReleaseEvent(event)
+    
+    # 添加量角器相关方法
+    def enable_angle_measure(self, enable):
+        """启用或禁用角度测量功能"""
+        self.angle_mode = enable
+        
+        # 确保有图像查看器
+        if not hasattr(self, 'image_viewer') or not self.image_viewer:
+            self.status_bar.showMessage("图像查看器未初始化，无法启用角度测量工具")
+            return
+            
+        # 确保图像查看器有场景
+        if not self.image_viewer.scene():
+            self.status_bar.showMessage("没有图像可以测量角度")
+            return
+        
+        # 禁用距离测量
+        if enable:
+            self.measure_mode = False
+        
+        if enable:
+            # 连接图像查看器鼠标事件
+            self.image_viewer.mousePressEvent = self.angle_mouse_press
+            self.image_viewer.mouseMoveEvent = self.angle_mouse_move
+            self.image_viewer.mouseReleaseEvent = self.angle_mouse_release
+            
+            # 显示提示信息
+            self.status_bar.showMessage("角度测量工具已激活：请依次点击三个点以测量角度(中间点为角的顶点)")
+            
+            # 重置量角器状态
+            self.angle_current_line = 0
+            self.angle_points = []
+        else:
+            # 还原图像查看器默认鼠标事件
+            # 恢复原始事件处理方法
+            if hasattr(self.image_viewer, 'set_tool'):
+                # 如果有指针模式，则恢复为指针模式
+                if self.pointer_mode:
+                    self.image_viewer.set_tool("pointer")
+                elif self.hand_mode:
+                    self.image_viewer.set_tool("hand")
+            else:
+                    # 默认恢复到指针模式
+                    self.image_viewer.set_tool("pointer")
+            
+            # 清理任何正在进行的角度测量
+            if self.angle_lines:
+                for line in self.angle_lines:
+                    if line and line.scene():
+                        self.image_viewer.scene().removeItem(line)
+                self.angle_lines = []
+            
+            self.angle_points = []
+            self.angle_current_line = 0
+            
+            self.status_bar.showMessage("角度测量工具已禁用")
+    
+    def angle_mouse_press(self, event):
+        """量角器的鼠标按下事件"""
+        if self.angle_mode:
+            # 确保图像查看器已经准备好并且有场景
+            if not self.image_viewer or not self.image_viewer.scene():
+                self.status_bar.showMessage("无法进行角度测量：图像查看器未准备好")
+                return
+            
+            scene_pos = self.image_viewer.mapToScene(event.pos())
+            pos = (scene_pos.x(), scene_pos.y())
+            
+            # 第一次点击，开始第一条线
+            if self.angle_current_line == 0:
+                self.angle_points = [pos]  # 存储第一个点
+                
+                # 创建第一条线
+                line = QGraphicsLineItem(
+                    pos[0], pos[1], pos[0], pos[1]
+                )
+                pen = QPen(Qt.blue)
+                pen.setWidth(2)
+                line.setPen(pen)
+                self.image_viewer.scene().addItem(line)
+                self.angle_lines.append(line)
+                
+                self.angle_current_line = 1  # 进入第一条线的绘制状态
+                
+            # 第二次点击，完成第一条线，开始第二条线
+            elif self.angle_current_line == 1:
+                if len(self.angle_points) == 1:
+                    self.angle_points.append(pos)  # 存储第二个点（角的顶点）
+                    
+                    # 完成第一条线
+                    line1 = self.angle_lines[0]
+                    line1.setLine(
+                        self.angle_points[0][0],
+                        self.angle_points[0][1],
+                        pos[0],
+                        pos[1]
+                    )
+                    
+                    # 创建第二条线
+                    line2 = QGraphicsLineItem(
+                        pos[0], pos[1], pos[0], pos[1]
+                    )
+                    pen = QPen(Qt.blue)
+                    pen.setWidth(2)
+                    line2.setPen(pen)
+                    self.image_viewer.scene().addItem(line2)
+                    self.angle_lines.append(line2)
+                    
+                    self.angle_current_line = 2  # 进入第二条线的绘制状态
+                    
+            # 第三次点击，完成第二条线，计算角度
+            elif self.angle_current_line == 2:
+                if len(self.angle_points) == 2:
+                    self.angle_points.append(pos)  # 存储第三个点
+                    
+                    # 完成第二条线
+                    line2 = self.angle_lines[1]
+                    line2.setLine(
+                        self.angle_points[1][0],
+                        self.angle_points[1][1],
+                        pos[0],
+                        pos[1]
+                    )
+                    
+                    # 计算角度
+                    vertex = self.angle_points[1]
+                    point1 = self.angle_points[0]
+                    point2 = self.angle_points[2]
+                    
+                    # 计算向量
+                    vector1 = (point1[0] - vertex[0], point1[1] - vertex[1])
+                    vector2 = (point2[0] - vertex[0], point2[1] - vertex[1])
+                    
+                    # 计算向量的模
+                    norm1 = math.sqrt(vector1[0]**2 + vector1[1]**2)
+                    norm2 = math.sqrt(vector2[0]**2 + vector2[1]**2)
+                    
+                    # 计算点积
+                    dot_product = vector1[0]*vector2[0] + vector1[1]*vector2[1]
+                    
+                    # 计算角度（弧度）
+                    if norm1 * norm2 == 0:
+                        angle_rad = 0
+                    else:
+                        # 使用余弦公式计算角度
+                        cos_angle = max(-1, min(1, dot_product / (norm1 * norm2)))
+                        angle_rad = math.acos(cos_angle)
+                    
+                    # 转换为角度
+                    angle_deg = math.degrees(angle_rad)
+                    
+                    # 创建角度文本
+                    text = QGraphicsTextItem(f"{angle_deg:.1f}°")
+                    text.setDefaultTextColor(Qt.blue)
+                    text.setPos(vertex[0] + 10, vertex[1] + 10)
+                    self.image_viewer.scene().addItem(text)
+                    self.angle_texts.append(text)
+                    
+                    # 更新状态栏
+                    self.status_bar.showMessage(f"测量角度: {angle_deg:.1f}°")
+                    
+                    # 重置角度测量状态，准备下一次测量
+                    self.angle_current_line = 0
+                    self.angle_points = []
+            
+            # 强制更新视图
+            self.image_viewer.viewport().update()
+            
+            # 阻止事件传递
+            event.accept()
+            return
+        
+            # 使用默认的处理方式
+        super(type(self.image_viewer), self.image_viewer).mousePressEvent(event)
+    
+    def angle_mouse_move(self, event):
+        """量角器的鼠标移动事件"""
+        if self.angle_mode:
+            # 确保图像查看器已经准备好并且有场景
+            if not self.image_viewer or not self.image_viewer.scene():
+                return
+                
+            scene_pos = self.image_viewer.mapToScene(event.pos())
+            pos = (scene_pos.x(), scene_pos.y())
+            
+            # 正在绘制第一条线
+            if self.angle_current_line == 1 and len(self.angle_points) == 1:
+                # 更新第一条线
+                line = self.angle_lines[0]
+                line.setLine(
+                    self.angle_points[0][0],
+                    self.angle_points[0][1],
+                    pos[0],
+                    pos[1]
+                )
+                
+            # 正在绘制第二条线
+            elif self.angle_current_line == 2 and len(self.angle_points) == 2:
+                # 更新第二条线
+                line = self.angle_lines[1]
+                line.setLine(
+                    self.angle_points[1][0],
+                    self.angle_points[1][1],
+                    pos[0],
+                    pos[1]
+                )
+            
+            # 强制更新视图
+            self.image_viewer.viewport().update()
+            
+            # 阻止事件传递
+            event.accept()
+            return
+        
+            # 使用默认的处理方式
+        super(type(self.image_viewer), self.image_viewer).mouseMoveEvent(event)
+    
+    def angle_mouse_release(self, event):
+        """量角器的鼠标释放事件"""
+        if self.angle_mode:
+            # 确保图像查看器已经准备好并且有场景
+            if not self.image_viewer or not self.image_viewer.scene():
+                return
+                
+            # 强制更新视图
+            self.image_viewer.viewport().update()
+            
+            # 阻止事件传递
+            event.accept()
+            return
+        
+            # 使用默认的处理方式
+        super(type(self.image_viewer), self.image_viewer).mouseReleaseEvent(event)
+
+    # 新增图像处理功能
+    def adjust_window_level(self):
+        """窗位窗宽调整"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+        
+        # 默认窗位和窗宽
+        default_level = 128
+        default_width = 255
+        
+        # 如果是灰度图像，计算平均值作为初始窗位
+        if len(self.image.shape) == 2 or (len(self.image.shape) == 3 and self.image.shape[2] == 1):
+            default_level = int(np.mean(self.image))
+        
+        # 创建并显示窗位窗宽调整对话框
+        dialog = WindowLevelDialog(self, default_level, default_width)
+        if dialog.exec_():
+            level, width = dialog.get_values()
+            
+            # 应用窗位窗宽调整
+            try:
+                # 计算上下阈值
+                min_val = max(0, level - width // 2)
+                max_val = min(255, level + width // 2)
+                
+                # 复制原图以保留原始数据
+                adjusted_img = self.image.copy()
+                
+                # 如果是彩色图像，分别处理每个通道
+                if len(adjusted_img.shape) == 3 and adjusted_img.shape[2] >= 3:
+                    for i in range(3):  # 处理BGR三个通道
+                        # 限制在阈值范围内
+                        adjusted_img[:, :, i] = np.clip(adjusted_img[:, :, i], min_val, max_val)
+                        # 重新映射到0-255
+                        if max_val > min_val:  # 避免除零错误
+                            adjusted_img[:, :, i] = ((adjusted_img[:, :, i] - min_val) / (max_val - min_val)) * 255
+                else:
+                    # 灰度图像处理
+                    adjusted_img = np.clip(adjusted_img, min_val, max_val)
+                    if max_val > min_val:  # 避免除零错误
+                        adjusted_img = ((adjusted_img - min_val) / (max_val - min_val)) * 255
+                
+                # 确保结果是uint8类型
+                adjusted_img = adjusted_img.astype(np.uint8)
+                
+                # 显示结果
+                self.display_image(self.original_image_label, adjusted_img)
+                
+                # 保存处理后的图像，以便后续操作
+                self.image = adjusted_img
+                
+                self.status_bar.showMessage(f"窗位窗宽调整已应用: 窗位={level}, 窗宽={width}")
+            except Exception as e:
+                self.status_bar.showMessage(f"窗位窗宽调整失败: {str(e)}")
+
+    def adjust_brightness_contrast(self):
+        """亮度对比度调整"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+        
+        # 创建并显示亮度对比度调整对话框
+        dialog = BrightnessContrastDialog(self, 0, 0)
+        if dialog.exec_():
+            brightness, contrast = dialog.get_values()
+            
+            # 应用亮度对比度调整
+            try:
+                # 复制原图以保留原始数据
+                adjusted_img = self.image.copy()
+                
+                # 计算亮度和对比度参数
+                alpha = (contrast + 100) / 100.0  # 对比度因子
+                beta = brightness  # 亮度因子
+                
+                # 应用变换: g(x) = alpha * f(x) + beta
+                adjusted_img = cv2.convertScaleAbs(adjusted_img, alpha=alpha, beta=beta)
+                
+                # 显示结果
+                self.display_image(self.original_image_label, adjusted_img)
+                
+                # 保存处理后的图像，以便后续操作
+                self.image = adjusted_img
+                
+                self.status_bar.showMessage(f"亮度对比度调整已应用: 亮度={brightness}, 对比度={contrast}")
+            except Exception as e:
+                self.status_bar.showMessage(f"亮度对比度调整失败: {str(e)}")
+    
+    def apply_sharpen(self):
+        """应用锐化滤波"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 复制原图以保留原始数据
+            sharpened_img = self.image.copy()
+            
+            # 定义锐化核
+            kernel = np.array([[-1, -1, -1],
+                              [-1,  9, -1],
+                              [-1, -1, -1]])
+            
+            # 应用卷积
+            sharpened_img = cv2.filter2D(sharpened_img, -1, kernel)
+            
+            # 显示结果
+            self.display_image(self.original_image_label, sharpened_img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = sharpened_img
+            
+            self.status_bar.showMessage("锐化滤波已应用")
+        except Exception as e:
+            self.status_bar.showMessage(f"锐化滤波应用失败: {str(e)}")
+    
+    def apply_smooth(self):
+        """应用平滑滤波"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 复制原图以保留原始数据
+            smoothed_img = self.image.copy()
+            
+            # 应用高斯模糊
+            smoothed_img = cv2.GaussianBlur(smoothed_img, (5, 5), 0)
+            
+            # 显示结果
+            self.display_image(self.original_image_label, smoothed_img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = smoothed_img
+            
+            self.status_bar.showMessage("平滑滤波已应用")
+        except Exception as e:
+            self.status_bar.showMessage(f"平滑滤波应用失败: {str(e)}")
+    
+    def apply_histogram_eq(self):
+        """应用直方图均衡化"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 复制原图以保留原始数据
+            equalized_img = self.image.copy()
+            
+            # 对于彩色图像，在LAB空间中只均衡化亮度通道
+            if len(equalized_img.shape) == 3 and equalized_img.shape[2] >= 3:
+                # 转换到LAB空间
+                lab = cv2.cvtColor(equalized_img, cv2.COLOR_BGR2LAB)
+                
+                # 分离通道
+                l, a, b = cv2.split(lab)
+                
+                # 对亮度通道进行均衡化
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                cl = clahe.apply(l)
+                
+                # 合并通道
+                limg = cv2.merge((cl, a, b))
+                
+                # 转换回BGR空间
+                equalized_img = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+            else:
+                # 灰度图像直接均衡化
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                equalized_img = clahe.apply(equalized_img)
+            
+            # 显示结果
+            self.display_image(self.original_image_label, equalized_img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = equalized_img
+            
+            self.status_bar.showMessage("直方图均衡化已应用")
+        except Exception as e:
+            self.status_bar.showMessage(f"直方图均衡化应用失败: {str(e)}")
+    
+    def apply_edge_detection(self):
+        """应用边缘检测"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 复制原图以保留原始数据
+            img = self.image.copy()
+            
+            # 如果是彩色图像，先转换为灰度图
+            if len(img.shape) == 3 and img.shape[2] >= 3:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = img.copy()
+            
+            # 应用Canny边缘检测
+            edges = cv2.Canny(gray, 50, 150)
+            
+            # 如果原图是彩色的，创建彩色边缘图
+            if len(img.shape) == 3 and img.shape[2] >= 3:
+                # 创建彩色边缘图像（红色边缘）
+                edge_color = np.zeros_like(img)
+                edge_color[edges > 0] = [0, 0, 255]  # 红色边缘
+                
+                # 将边缘叠加到原图
+                img = cv2.addWeighted(img, 0.7, edge_color, 0.3, 0)
+            else:
+                # 灰度图像直接使用边缘图
+                img = edges
+            
+            # 显示结果
+            self.display_image(self.original_image_label, img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = img
+            
+            self.status_bar.showMessage("边缘检测已应用")
+        except Exception as e:
+            self.status_bar.showMessage(f"边缘检测应用失败: {str(e)}")
+    
+    def apply_flip_horizontal(self):
+        """水平翻转图像"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 执行水平翻转
+            flipped_img = cv2.flip(self.image, 1)  # 1表示水平翻转
+            
+            # 显示结果
+            self.display_image(self.original_image_label, flipped_img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = flipped_img
+            
+            self.status_bar.showMessage("图像已水平翻转")
+        except Exception as e:
+            self.status_bar.showMessage(f"水平翻转失败: {str(e)}")
+    
+    def apply_flip_vertical(self):
+        """垂直翻转图像"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 执行垂直翻转
+            flipped_img = cv2.flip(self.image, 0)  # 0表示垂直翻转
+            
+            # 显示结果
+            self.display_image(self.original_image_label, flipped_img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = flipped_img
+            
+            self.status_bar.showMessage("图像已垂直翻转")
+        except Exception as e:
+            self.status_bar.showMessage(f"垂直翻转失败: {str(e)}")
+    
+    def apply_rotate_90(self):
+        """旋转图像90度"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+            
+        try:
+            # 执行90度旋转
+            rotated_img = cv2.rotate(self.image, cv2.ROTATE_90_CLOCKWISE)
+            
+            # 显示结果
+            self.display_image(self.original_image_label, rotated_img)
+            
+            # 保存处理后的图像，以便后续操作
+            self.image = rotated_img
+            
+            self.status_bar.showMessage("图像已旋转90度")
+        except Exception as e:
+            self.status_bar.showMessage(f"旋转失败: {str(e)}")
+    
+    def extract_roi(self):
+        """提取感兴趣区域"""
+        if self.image is None:
+            self.status_bar.showMessage("没有可处理的图像")
+            return
+        
+        # 切换到ROI选择模式
+        self.status_bar.showMessage("请在图像上用鼠标拖动选择ROI区域")
+        
+        # 保存当前图像查看器状态
+        self._prev_mouse_press = self.image_viewer.mousePressEvent
+        self._prev_mouse_move = self.image_viewer.mouseMoveEvent
+        self._prev_mouse_release = self.image_viewer.mouseReleaseEvent
+        
+        # 创建橡皮筋选择工具
+        self.rubber_band = QRubberBand(QRubberBand.Rectangle, self.image_viewer)
+        self.roi_origin = None
+        
+        # 设置ROI选择的鼠标事件
+        self.image_viewer.mousePressEvent = self.roi_mouse_press
+        self.image_viewer.mouseMoveEvent = self.roi_mouse_move
+        self.image_viewer.mouseReleaseEvent = self.roi_mouse_release
+    
+    def roi_mouse_press(self, event):
+        """ROI选择的鼠标按下事件"""
+        if event.button() == Qt.LeftButton:
+            # 记录起点
+            self.roi_origin = event.pos()
+            self.rubber_band.setGeometry(QRect(self.roi_origin, QSize()))
+            self.rubber_band.show()
+            event.accept()
+    
+    def roi_mouse_move(self, event):
+        """ROI选择的鼠标移动事件"""
+        if self.roi_origin is not None:
+            # 更新橡皮筋矩形
+            self.rubber_band.setGeometry(QRect(self.roi_origin, event.pos()).normalized())
+            event.accept()
+    
+    def roi_mouse_release(self, event):
+        """ROI选择的鼠标释放事件"""
+        if event.button() == Qt.LeftButton and self.roi_origin is not None:
+            # 获取选择区域
+            roi_rect = self.rubber_band.geometry()
+            
+            # 隐藏橡皮筋
+            self.rubber_band.hide()
+            
+            # 转换为场景坐标
+            scene_pos1 = self.image_viewer.mapToScene(roi_rect.topLeft())
+            scene_pos2 = self.image_viewer.mapToScene(roi_rect.bottomRight())
+            
+            # 获取ROI区域
+            x1, y1 = int(scene_pos1.x()), int(scene_pos1.y())
+            x2, y2 = int(scene_pos2.x()), int(scene_pos2.y())
+            
+            # 确保坐标在图像范围内
+            if len(self.image.shape) == 3:
+                h, w, _ = self.image.shape
+            else:
+                h, w = self.image.shape
+                
+            x1 = max(0, min(x1, w-1))
+            y1 = max(0, min(y1, h-1))
+            x2 = max(0, min(x2, w-1))
+            y2 = max(0, min(y2, h-1))
+            
+            # 如果选择了有效区域
+            if x2 > x1 and y2 > y1:
+                # 提取ROI
+                roi = self.image[y1:y2, x1:x2]
+                
+                # 显示ROI
+                self.display_image(self.original_image_label, roi)
+                
+                # 更新图像
+                self.image = roi
+                
+                self.status_bar.showMessage(f"ROI已提取: ({x1},{y1}) to ({x2},{y2})")
+            else:
+                self.status_bar.showMessage("无效的ROI区域")
+            
+            # 恢复原来的鼠标事件处理
+            self.image_viewer.mousePressEvent = self._prev_mouse_press
+            self.image_viewer.mouseMoveEvent = self._prev_mouse_move
+            self.image_viewer.mouseReleaseEvent = self._prev_mouse_release
+            
+            event.accept()
 
 # 添加自定义图像查看器类
 class ZoomableImageViewer(QGraphicsView):
@@ -824,7 +1794,7 @@ class ZoomableImageViewer(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setBackgroundBrush(QBrush(QColor(240, 240, 240)))
         self.setFrameShape(QFrame.NoFrame)
-        self.setDragMode(QGraphicsView.ScrollHandDrag)  # 允许拖动
+        self.setDragMode(QGraphicsView.NoDrag)  # 默认为指针模式
         
         # 添加缩放级别跟踪
         self.zoom_level = 1.0
@@ -834,16 +1804,30 @@ class ZoomableImageViewer(QGraphicsView):
         # 控制是否自动适应视图
         self.should_fit_in_view = True
         
-        # 调试信息
-        print("ZoomableImageViewer initialized")
+        # 标志，用于跟踪鼠标按下状态和拖动
+        self.is_dragging = False
+        self.drag_start_pos = None
+        
+        # 工具模式
+        self.current_tool = "pointer"  # 默认为指针工具
+
+    def set_tool(self, tool_name):
+        """设置当前工具模式"""
+        self.current_tool = tool_name
+        
+        if tool_name == "pointer":
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(Qt.ArrowCursor)
+        elif tool_name == "hand":
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            self.setCursor(Qt.OpenHandCursor)
+        
+        # 测量工具在SuperResolutionTab中处理
 
     def wheelEvent(self, event):
         """处理鼠标滚轮事件实现缩放"""
         # 获取滚轮事件信息
         delta = event.angleDelta().y()
-        
-        # 直接打印滚轮值以便调试
-        print(f"Mouse wheel delta: {delta}")
         
         # 一旦用户开始缩放，就禁用自动适应视图
         self.should_fit_in_view = False
@@ -855,19 +1839,15 @@ class ZoomableImageViewer(QGraphicsView):
         if delta > 0:  # 向上滚动
             # 放大
             new_zoom = self.zoom_level * factor
-            print(f"Zooming in: {self.zoom_level} -> {new_zoom}")
         else:  # 向下滚动
             # 缩小
             new_zoom = self.zoom_level / factor
-            print(f"Zooming out: {self.zoom_level} -> {new_zoom}")
         
         # 应用缩放限制
         if new_zoom < self.min_zoom:
             new_zoom = self.min_zoom
-            print(f"Reached minimum zoom: {self.min_zoom}")
         elif new_zoom > self.max_zoom:
             new_zoom = self.max_zoom
-            print(f"Reached maximum zoom: {self.max_zoom}")
         
         # 计算实际缩放因子
         actual_factor = new_zoom / self.zoom_level
@@ -876,7 +1856,6 @@ class ZoomableImageViewer(QGraphicsView):
         if abs(actual_factor - 1.0) > 0.001:
             self.scale(actual_factor, actual_factor)
             self.zoom_level = new_zoom
-            print(f"Applied zoom: {self.zoom_level}")
         
         # 阻止事件传递，避免滚动条同时响应
         event.accept()
@@ -894,14 +1873,12 @@ class ZoomableImageViewer(QGraphicsView):
         
         # 仅在初始设置图像时适应视图
         self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
-        print(f"Set new image, initial fit to view, zoom: {self.zoom_level}")
 
     def fit_in_view(self):
         """调整图像以适应视图大小 (仅在需要时调用)"""
         if self.pixmap_item and self.should_fit_in_view:
             self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
             self.zoom_level = 1.0
-            print("Fit image to view, zoom reset to 1.0")
 
     def resizeEvent(self, event):
         """窗口大小改变时的处理"""
@@ -910,9 +1887,6 @@ class ZoomableImageViewer(QGraphicsView):
         # 只有在初始状态或明确请求时才适应视图
         if self.pixmap_item and self.should_fit_in_view:
             self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
-            print("Window resized, adjusted view to fit")
-        else:
-            print("Window resized, maintaining current zoom level")
             
     def mousePressEvent(self, event):
         """处理鼠标按下事件"""
@@ -922,8 +1896,43 @@ class ZoomableImageViewer(QGraphicsView):
                 self.should_fit_in_view = True
                 self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
                 self.zoom_level = 1.0
-                print("Middle mouse button - reset to fit view")
                 event.accept()
                 return
                 
+        elif event.button() == Qt.LeftButton:
+            # 左键按下，可能开始拖动
+            self.is_dragging = True
+            self.drag_start_pos = event.pos()
+            if self.current_tool == "hand":
+                self.setCursor(Qt.ClosedHandCursor)  # 显示抓取手势
+            
+        # 调用父类方法
         super().mousePressEvent(event) 
+        
+    def mouseMoveEvent(self, event):
+        """处理鼠标移动事件，实现拖动"""
+        # 如果处于拖动状态，并且是手型工具模式
+        if self.is_dragging and self.current_tool == "hand" and self.drag_start_pos:
+            # 实现拖动逻辑
+            delta = event.pos() - self.drag_start_pos
+            self.drag_start_pos = event.pos()
+            
+            # 移动视图
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            
+            event.accept()
+            return
+        
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """处理鼠标释放事件，结束拖动"""
+        if event.button() == Qt.LeftButton:
+            # 左键释放，结束拖动
+            self.is_dragging = False
+            if self.current_tool == "hand":
+                self.setCursor(Qt.OpenHandCursor)  # 恢复普通手势
+            
+        # 调用父类方法
+        super().mouseReleaseEvent(event)
