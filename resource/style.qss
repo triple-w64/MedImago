@@ -83,7 +83,7 @@ QToolBar QAction {
 }
 
 QToolBar QToolButton {
-    color: #EEEEEE; 
+    color: #444444; 
 }
 
 QFrame[frameShape="5"] {  /* VLine = 5 */

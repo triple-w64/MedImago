@@ -21,7 +21,11 @@ class WindowLevelDialog(QDialog):
     def __init__(self, parent=None, window_level=128, window_width=255):
         super().__init__(parent)
         self.setWindowTitle("窗位窗宽调整")
-        self.setMinimumWidth(350)
+        self.setMinimumWidth(400)
+        
+        # 保存父对象和原始图像
+        self.parent = parent
+        self.original_image = parent.image.copy() if parent.image is not None else None
         
         layout = QGridLayout(self)
         
@@ -46,14 +50,23 @@ class WindowLevelDialog(QDialog):
         layout.addWidget(self.width_value, 1, 2)
         
         # 添加按钮
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox()
+        self.apply_button = self.button_box.addButton("应用", QDialogButtonBox.ApplyRole)
+        self.button_box.addButton(QDialogButtonBox.Ok)
+        self.button_box.addButton(QDialogButtonBox.Cancel)
         layout.addWidget(self.button_box, 2, 0, 1, 3)
         
         # 连接信号
         self.level_slider.valueChanged.connect(self.update_level_value)
+        self.level_slider.valueChanged.connect(self.preview_changes)
         self.width_slider.valueChanged.connect(self.update_width_value)
+        self.width_slider.valueChanged.connect(self.preview_changes)
+        self.apply_button.clicked.connect(self.apply_changes)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
+        
+        # 初始预览
+        self.preview_changes()
         
     def update_level_value(self, value):
         self.level_value.setText(str(value))
@@ -63,13 +76,107 @@ class WindowLevelDialog(QDialog):
         
     def get_values(self):
         return self.level_slider.value(), self.width_slider.value()
+    
+    def preview_changes(self):
+        """实时预览窗位窗宽调整"""
+        if self.original_image is None:
+            return
+            
+        try:
+            level, width = self.get_values()
+            
+            # 计算上下阈值
+            min_val = max(0, level - width // 2)
+            max_val = min(255, level + width // 2)
+            
+            # 复制原图以保留原始数据
+            adjusted_img = self.original_image.copy()
+            
+            # 如果是彩色图像，分别处理每个通道
+            if len(adjusted_img.shape) == 3 and adjusted_img.shape[2] >= 3:
+                for i in range(3):  # 处理BGR三个通道
+                    # 限制在阈值范围内
+                    adjusted_img[:, :, i] = np.clip(adjusted_img[:, :, i], min_val, max_val)
+                    # 重新映射到0-255
+                    if max_val > min_val:  # 避免除零错误
+                        adjusted_img[:, :, i] = ((adjusted_img[:, :, i] - min_val) / (max_val - min_val)) * 255
+            else:
+                # 灰度图像处理
+                adjusted_img = np.clip(adjusted_img, min_val, max_val)
+                if max_val > min_val:  # 避免除零错误
+                    adjusted_img = ((adjusted_img - min_val) / (max_val - min_val)) * 255
+            
+            # 确保结果是uint8类型
+            adjusted_img = adjusted_img.astype(np.uint8)
+            
+            # 显示结果
+            self.parent.display_image(self.parent.original_image_label, adjusted_img)
+            
+        except Exception as e:
+            print(f"预览窗位窗宽调整失败: {str(e)}")
+    
+    def apply_changes(self):
+        """应用当前设置但不关闭对话框"""
+        if self.original_image is None:
+            return
+            
+        try:
+            level, width = self.get_values()
+            
+            # 计算上下阈值
+            min_val = max(0, level - width // 2)
+            max_val = min(255, level + width // 2)
+            
+            # 复制原图以保留原始数据
+            adjusted_img = self.original_image.copy()
+            
+            # 如果是彩色图像，分别处理每个通道
+            if len(adjusted_img.shape) == 3 and adjusted_img.shape[2] >= 3:
+                for i in range(3):  # 处理BGR三个通道
+                    # 限制在阈值范围内
+                    adjusted_img[:, :, i] = np.clip(adjusted_img[:, :, i], min_val, max_val)
+                    # 重新映射到0-255
+                    if max_val > min_val:  # 避免除零错误
+                        adjusted_img[:, :, i] = ((adjusted_img[:, :, i] - min_val) / (max_val - min_val)) * 255
+            else:
+                # 灰度图像处理
+                adjusted_img = np.clip(adjusted_img, min_val, max_val)
+                if max_val > min_val:  # 避免除零错误
+                    adjusted_img = ((adjusted_img - min_val) / (max_val - min_val)) * 255
+            
+            # 确保结果是uint8类型
+            adjusted_img = adjusted_img.astype(np.uint8)
+            
+            # 显示结果并更新父组件的图像
+            self.parent.display_image(self.parent.original_image_label, adjusted_img)
+            self.parent.image = adjusted_img.copy()
+            self.original_image = adjusted_img.copy()  # 更新对话框中的原始图像
+            
+            self.parent.status_bar.showMessage(f"窗位窗宽调整已应用: 窗位={level}, 窗宽={width}")
+        except Exception as e:
+            self.parent.status_bar.showMessage(f"窗位窗宽调整失败: {str(e)}")
+    
+    def accept(self):
+        """确定按钮处理"""
+        # 应用当前设置
+        level, width = self.get_values()
+        
+        # 确保父组件的图像已更新为最终结果
+        # (已在preview_changes中处理)
+        
+        self.parent.status_bar.showMessage(f"窗位窗宽调整已完成: 窗位={level}, 窗宽={width}")
+        super().accept()
 
 # 添加亮度对比度调整对话框
 class BrightnessContrastDialog(QDialog):
     def __init__(self, parent=None, brightness=0, contrast=0):
         super().__init__(parent)
         self.setWindowTitle("亮度/对比度调整")
-        self.setMinimumWidth(350)
+        self.setMinimumWidth(400)
+        
+        # 保存父对象和原始图像
+        self.parent = parent
+        self.original_image = parent.image.copy() if parent.image is not None else None
         
         layout = QGridLayout(self)
         
@@ -94,14 +201,23 @@ class BrightnessContrastDialog(QDialog):
         layout.addWidget(self.contrast_value, 1, 2)
         
         # 添加按钮
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox()
+        self.apply_button = self.button_box.addButton("应用", QDialogButtonBox.ApplyRole)
+        self.button_box.addButton(QDialogButtonBox.Ok)
+        self.button_box.addButton(QDialogButtonBox.Cancel)
         layout.addWidget(self.button_box, 2, 0, 1, 3)
         
         # 连接信号
         self.brightness_slider.valueChanged.connect(self.update_brightness_value)
+        self.brightness_slider.valueChanged.connect(self.preview_changes)
         self.contrast_slider.valueChanged.connect(self.update_contrast_value)
+        self.contrast_slider.valueChanged.connect(self.preview_changes)
+        self.apply_button.clicked.connect(self.apply_changes)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
+        
+        # 初始预览
+        self.preview_changes()
         
     def update_brightness_value(self, value):
         self.brightness_value.setText(str(value))
@@ -111,6 +227,68 @@ class BrightnessContrastDialog(QDialog):
         
     def get_values(self):
         return self.brightness_slider.value(), self.contrast_slider.value()
+        
+    def preview_changes(self):
+        """实时预览亮度对比度调整"""
+        if self.original_image is None:
+            return
+            
+        try:
+            brightness, contrast = self.get_values()
+            
+            # 复制原图以保留原始数据
+            adjusted_img = self.original_image.copy()
+            
+            # 计算亮度和对比度参数
+            alpha = (contrast + 100) / 100.0  # 对比度因子
+            beta = brightness  # 亮度因子
+            
+            # 应用变换: g(x) = alpha * f(x) + beta
+            adjusted_img = cv2.convertScaleAbs(adjusted_img, alpha=alpha, beta=beta)
+            
+            # 显示结果
+            self.parent.display_image(self.parent.original_image_label, adjusted_img)
+            
+        except Exception as e:
+            print(f"预览亮度对比度调整失败: {str(e)}")
+    
+    def apply_changes(self):
+        """应用当前设置但不关闭对话框"""
+        if self.original_image is None:
+            return
+            
+        try:
+            brightness, contrast = self.get_values()
+            
+            # 复制原图以保留原始数据
+            adjusted_img = self.original_image.copy()
+            
+            # 计算亮度和对比度参数
+            alpha = (contrast + 100) / 100.0  # 对比度因子
+            beta = brightness  # 亮度因子
+            
+            # 应用变换: g(x) = alpha * f(x) + beta
+            adjusted_img = cv2.convertScaleAbs(adjusted_img, alpha=alpha, beta=beta)
+            
+            # 显示结果并更新父组件的图像
+            self.parent.display_image(self.parent.original_image_label, adjusted_img)
+            self.parent.image = adjusted_img.copy()
+            self.original_image = adjusted_img.copy()  # 更新对话框中的原始图像
+            
+            self.parent.status_bar.showMessage(f"亮度对比度调整已应用: 亮度={brightness}, 对比度={contrast}")
+        except Exception as e:
+            self.parent.status_bar.showMessage(f"亮度对比度调整失败: {str(e)}")
+    
+    def accept(self):
+        """确定按钮处理"""
+        # 应用当前设置
+        brightness, contrast = self.get_values()
+        
+        # 确保父组件的图像已更新为最终结果
+        # (已在preview_changes中处理)
+        
+        self.parent.status_bar.showMessage(f"亮度对比度调整已完成: 亮度={brightness}, 对比度={contrast}")
+        super().accept()
 
 # 超分辨率模块
 class SuperResolutionTab(QWidget):
@@ -118,6 +296,10 @@ class SuperResolutionTab(QWidget):
         super().__init__(parent)
         self.main_window = parent
         self.status_bar = status_bar
+        
+        # 对话框实例变量
+        self.window_level_dialog = None
+        self.brightness_contrast_dialog = None
         
         # 添加距离测量相关变量
         self.measure_mode = False
@@ -168,8 +350,8 @@ class SuperResolutionTab(QWidget):
         splitter.addWidget(self.right_container)
         
         # 设置拉伸因子(可自由调整)
-        splitter.setStretchFactor(0, 1)  # 视频播放器
-        splitter.setStretchFactor(1, 1)  # SR控制
+        splitter.setStretchFactor(0, 4)  # 视频播放器
+        splitter.setStretchFactor(1, 6)  # SR控制
 
         # 添加到主布局
         self.main_layout.addWidget(splitter)
@@ -304,7 +486,7 @@ class SuperResolutionTab(QWidget):
         """创建文件管理器"""
         # 使用QTreeWidget
         self.file_tree = QTreeWidget()
-        self.file_tree.setHeaderLabel("Files")
+        self.file_tree.setHeaderLabel("文件")
         self.file_tree.itemDoubleClicked.connect(self.open_selected_file)
         
         # 添加文件树展开事件处理
@@ -313,10 +495,10 @@ class SuperResolutionTab(QWidget):
         # 创建水平布局放置按钮
         button_layout = QHBoxLayout()
         
-        load_folder_btn = QPushButton("Load Folder")
+        load_folder_btn = QPushButton("加载文件夹")
         load_folder_btn.clicked.connect(self.load_folder)
         
-        connect_stream_btn = QPushButton("Connect Streaming") 
+        connect_stream_btn = QPushButton("连接流媒体") 
         connect_stream_btn.clicked.connect(self.connect_streaming)
         
         button_layout.addWidget(load_folder_btn)
@@ -384,11 +566,11 @@ class SuperResolutionTab(QWidget):
         # 视频控制按钮
         controls_layout = QHBoxLayout()
         
-        self.play_button = QPushButton("Play")
-        self.replay_button = QPushButton("Replay")
-        self.stop_button = QPushButton("Stop")
-        self.capture_button = QPushButton("Capture Frame")
-        self.freeze_button = QPushButton("Freeze")
+        self.play_button = QPushButton("播放")
+        self.replay_button = QPushButton("重新播放")
+        self.stop_button = QPushButton("停止")
+        self.capture_button = QPushButton("捕获帧")
+        self.freeze_button = QPushButton("冻结")
         
         self.play_button.clicked.connect(self.play_video)
         self.replay_button.clicked.connect(self.replay_video)
@@ -498,7 +680,11 @@ class SuperResolutionTab(QWidget):
     def _display_image_in_label(self, image, label):
         """优化的图像显示逻辑，提高性能"""
         # 检查通道数
-        if len(image.shape) == 2 or image.shape[2] == 1:  # 灰度图像
+        if len(image.shape) == 2 or (len(image.shape) == 3 and image.shape[2] == 1):  # 灰度图像
+            # 确保图像数据是连续的内存块
+            if not image.flags['C_CONTIGUOUS']:
+                image = np.ascontiguousarray(image)
+                
             h, w = image.shape if len(image.shape) == 2 else image.shape[:2]
             bytes_per_line = w
             q_image = QImage(image.data, w, h, bytes_per_line, QImage.Format_Grayscale8)
@@ -508,6 +694,10 @@ class SuperResolutionTab(QWidget):
                 image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
             else:  # BGR图像
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
+            # 确保图像数据是连续的内存块    
+            if not image.flags['C_CONTIGUOUS']:
+                image = np.ascontiguousarray(image)
                 
             h, w, ch = image.shape
             bytes_per_line = ch * w
@@ -523,13 +713,21 @@ class SuperResolutionTab(QWidget):
                 # 使用图像查看器显示图像
                 h, w = image.shape[:2]
                 if len(image.shape) == 2:  # 灰度图像
-                    q_image = QImage(image.data, w, h, w, QImage.Format_Grayscale8)
+                    # 确保图像数据是连续的内存块
+                    if not image.flags['C_CONTIGUOUS']:
+                        image = np.ascontiguousarray(image)
+                    bytes_per_line = w  # 一个像素一个字节
+                    q_image = QImage(image.data, w, h, bytes_per_line, QImage.Format_Grayscale8)
                 else:  # 彩色图像
                     if image.shape[2] == 4:  # RGBA图像
                         image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
                     else:  # BGR图像
                         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                     
+                    # 确保图像数据是连续的内存块
+                    if not image.flags['C_CONTIGUOUS']:
+                        image = np.ascontiguousarray(image)
+                        
                     h, w, ch = image.shape
                     bytes_per_line = ch * w
                     q_image = QImage(image.data, w, h, bytes_per_line, QImage.Format_RGB888)
@@ -1424,46 +1622,9 @@ class SuperResolutionTab(QWidget):
         if len(self.image.shape) == 2 or (len(self.image.shape) == 3 and self.image.shape[2] == 1):
             default_level = int(np.mean(self.image))
         
-        # 创建并显示窗位窗宽调整对话框
-        dialog = WindowLevelDialog(self, default_level, default_width)
-        if dialog.exec_():
-            level, width = dialog.get_values()
-            
-            # 应用窗位窗宽调整
-            try:
-                # 计算上下阈值
-                min_val = max(0, level - width // 2)
-                max_val = min(255, level + width // 2)
-                
-                # 复制原图以保留原始数据
-                adjusted_img = self.image.copy()
-                
-                # 如果是彩色图像，分别处理每个通道
-                if len(adjusted_img.shape) == 3 and adjusted_img.shape[2] >= 3:
-                    for i in range(3):  # 处理BGR三个通道
-                        # 限制在阈值范围内
-                        adjusted_img[:, :, i] = np.clip(adjusted_img[:, :, i], min_val, max_val)
-                        # 重新映射到0-255
-                        if max_val > min_val:  # 避免除零错误
-                            adjusted_img[:, :, i] = ((adjusted_img[:, :, i] - min_val) / (max_val - min_val)) * 255
-                else:
-                    # 灰度图像处理
-                    adjusted_img = np.clip(adjusted_img, min_val, max_val)
-                    if max_val > min_val:  # 避免除零错误
-                        adjusted_img = ((adjusted_img - min_val) / (max_val - min_val)) * 255
-                
-                # 确保结果是uint8类型
-                adjusted_img = adjusted_img.astype(np.uint8)
-                
-                # 显示结果
-                self.display_image(self.original_image_label, adjusted_img)
-                
-                # 保存处理后的图像，以便后续操作
-                self.image = adjusted_img
-                
-                self.status_bar.showMessage(f"窗位窗宽调整已应用: 窗位={level}, 窗宽={width}")
-            except Exception as e:
-                self.status_bar.showMessage(f"窗位窗宽调整失败: {str(e)}")
+        # 创建并显示窗位窗宽调整对话框 - 不等待返回结果，对话框内部处理变更
+        self.window_level_dialog = WindowLevelDialog(self, default_level, default_width)
+        self.window_level_dialog.show()
 
     def adjust_brightness_contrast(self):
         """亮度对比度调整"""
@@ -1471,32 +1632,9 @@ class SuperResolutionTab(QWidget):
             self.status_bar.showMessage("没有可处理的图像")
             return
         
-        # 创建并显示亮度对比度调整对话框
-        dialog = BrightnessContrastDialog(self, 0, 0)
-        if dialog.exec_():
-            brightness, contrast = dialog.get_values()
-            
-            # 应用亮度对比度调整
-            try:
-                # 复制原图以保留原始数据
-                adjusted_img = self.image.copy()
-                
-                # 计算亮度和对比度参数
-                alpha = (contrast + 100) / 100.0  # 对比度因子
-                beta = brightness  # 亮度因子
-                
-                # 应用变换: g(x) = alpha * f(x) + beta
-                adjusted_img = cv2.convertScaleAbs(adjusted_img, alpha=alpha, beta=beta)
-                
-                # 显示结果
-                self.display_image(self.original_image_label, adjusted_img)
-                
-                # 保存处理后的图像，以便后续操作
-                self.image = adjusted_img
-                
-                self.status_bar.showMessage(f"亮度对比度调整已应用: 亮度={brightness}, 对比度={contrast}")
-            except Exception as e:
-                self.status_bar.showMessage(f"亮度对比度调整失败: {str(e)}")
+        # 创建并显示亮度对比度调整对话框 - 不等待返回结果，对话框内部处理变更
+        self.brightness_contrast_dialog = BrightnessContrastDialog(self, 0, 0)
+        self.brightness_contrast_dialog.show()
     
     def apply_sharpen(self):
         """应用锐化滤波"""
@@ -1734,50 +1872,65 @@ class SuperResolutionTab(QWidget):
     def roi_mouse_release(self, event):
         """ROI选择的鼠标释放事件"""
         if event.button() == Qt.LeftButton and self.roi_origin is not None:
-            # 获取选择区域
-            roi_rect = self.rubber_band.geometry()
-            
-            # 隐藏橡皮筋
-            self.rubber_band.hide()
-            
-            # 转换为场景坐标
-            scene_pos1 = self.image_viewer.mapToScene(roi_rect.topLeft())
-            scene_pos2 = self.image_viewer.mapToScene(roi_rect.bottomRight())
-            
-            # 获取ROI区域
-            x1, y1 = int(scene_pos1.x()), int(scene_pos1.y())
-            x2, y2 = int(scene_pos2.x()), int(scene_pos2.y())
-            
-            # 确保坐标在图像范围内
-            if len(self.image.shape) == 3:
-                h, w, _ = self.image.shape
-            else:
-                h, w = self.image.shape
+            try:
+                # 获取选择区域
+                roi_rect = self.rubber_band.geometry()
                 
-            x1 = max(0, min(x1, w-1))
-            y1 = max(0, min(y1, h-1))
-            x2 = max(0, min(x2, w-1))
-            y2 = max(0, min(y2, h-1))
-            
-            # 如果选择了有效区域
-            if x2 > x1 and y2 > y1:
-                # 提取ROI
-                roi = self.image[y1:y2, x1:x2]
+                # 隐藏橡皮筋
+                self.rubber_band.hide()
                 
-                # 显示ROI
-                self.display_image(self.original_image_label, roi)
+                # 转换为场景坐标
+                scene_pos1 = self.image_viewer.mapToScene(roi_rect.topLeft())
+                scene_pos2 = self.image_viewer.mapToScene(roi_rect.bottomRight())
                 
-                # 更新图像
-                self.image = roi
+                # 获取ROI区域
+                x1, y1 = int(scene_pos1.x()), int(scene_pos1.y())
+                x2, y2 = int(scene_pos2.x()), int(scene_pos2.y())
                 
-                self.status_bar.showMessage(f"ROI已提取: ({x1},{y1}) to ({x2},{y2})")
-            else:
-                self.status_bar.showMessage("无效的ROI区域")
-            
-            # 恢复原来的鼠标事件处理
-            self.image_viewer.mousePressEvent = self._prev_mouse_press
-            self.image_viewer.mouseMoveEvent = self._prev_mouse_move
-            self.image_viewer.mouseReleaseEvent = self._prev_mouse_release
+                # 确保坐标在图像范围内
+                if len(self.image.shape) == 3:
+                    h, w, _ = self.image.shape
+                else:
+                    h, w = self.image.shape
+                    
+                x1 = max(0, min(x1, w-1))
+                y1 = max(0, min(y1, h-1))
+                x2 = max(0, min(x2, w-1))
+                y2 = max(0, min(y2, h-1))
+                
+                # 如果选择了有效区域
+                if x2 > x1 and y2 > y1:
+                    # 提取ROI
+                    roi = self.image[y1:y2, x1:x2].copy()  # 使用copy()确保数据连续
+                    
+                    # 显示ROI信息
+                    roi_info = f"ROI形状: {roi.shape}, 类型: {roi.dtype}"
+                    print(f"已提取ROI区域: {roi_info}")
+                    
+                    # 显示ROI
+                    self.display_image(self.original_image_label, roi)
+                    
+                    # 更新图像
+                    self.image = roi
+                    
+                    self.status_bar.showMessage(f"ROI已提取: ({x1},{y1}) to ({x2},{y2}), {roi_info}")
+                else:
+                    self.status_bar.showMessage("无效的ROI区域")
+                
+                # 恢复原来的鼠标事件处理
+                self.image_viewer.mousePressEvent = self._prev_mouse_press
+                self.image_viewer.mouseMoveEvent = self._prev_mouse_move
+                self.image_viewer.mouseReleaseEvent = self._prev_mouse_release
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.status_bar.showMessage(f"ROI提取失败: {str(e)}")
+                
+                # 恢复原来的鼠标事件处理
+                self.image_viewer.mousePressEvent = self._prev_mouse_press
+                self.image_viewer.mouseMoveEvent = self._prev_mouse_move
+                self.image_viewer.mouseReleaseEvent = self._prev_mouse_release
             
             event.accept()
 

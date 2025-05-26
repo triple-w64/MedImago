@@ -55,6 +55,9 @@ class MedSAMTab(QWidget):
         self.prev_mask = None
         self.mask_c = None
         self.img_3c = None
+        
+        # 创建文件树变量，供外部设置
+        self.file_tree = QTreeWidget()
 
         # 主布局修改为水平布局
         self.main_layout = QHBoxLayout(self)
@@ -69,33 +72,23 @@ class MedSAMTab(QWidget):
         self.left_layout = QVBoxLayout()
         self.left_widget.setLayout(self.left_layout)
         
-        # 添加文件浏览区域
-        self.create_file_browser()
+        # 不再添加文件浏览区域
+        # self.create_file_browser()
         
-        # 图形视图作为可停靠部件
-        self.view_dock = QDockWidget("图像预览", self.inner_main_window)
-        self.view_dock.setFeatures(QDockWidget.DockWidgetFloatable | QDockWidget.DockWidgetMovable)
-        self.view_dock.setAllowedAreas(Qt.AllDockWidgetAreas)
-
-        # 图形视图
+        # 图形视图作为主要组件，不再使用dock
         self.view = QGraphicsView()
         self.view.setRenderHint(QPainter.Antialiasing)
         self.scene = QGraphicsScene()
         self.view.setScene(self.scene)
-        self.view_dock.setWidget(self.view)
         
-        # 添加到内部主窗口
-        self.inner_main_window.setCentralWidget(QWidget())  # 需要一个中央部件
-        self.inner_main_window.addDockWidget(Qt.TopDockWidgetArea, self.view_dock)
-        
-        # 添加内部主窗口到左侧布局
-        self.left_layout.addWidget(self.inner_main_window)
+        # 将图形视图直接添加到左侧布局
+        self.left_layout.addWidget(self.view)
 
         # 控制按钮布局
         control_layout = QHBoxLayout()
-        self.load_button = QPushButton("Load Image")
-        self.save_button = QPushButton("Save Mask")
-        self.undo_button = QPushButton("Undo")
+        self.load_button = QPushButton("加载图像")
+        self.save_button = QPushButton("保存掩码")
+        self.undo_button = QPushButton("撤销")
 
         self.load_button.clicked.connect(self.load_image)
         self.save_button.clicked.connect(self.save_mask)
@@ -118,7 +111,7 @@ class MedSAMTab(QWidget):
         right_content_layout.setSpacing(10)
         
         # 标题
-        title_label = QLabel("EF Calculation")
+        title_label = QLabel("射血分数计算")
         title_label.setStyleSheet("font-size: 12px; font-weight: bold; margin: 0px;")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFixedHeight(20)  # 缩小高度
@@ -136,7 +129,7 @@ class MedSAMTab(QWidget):
         edv_layout.setContentsMargins(2, 2, 2, 2)
         edv_layout.setSpacing(0)
         
-        self.edv_title = QLabel("EDV")
+        self.edv_title = QLabel("舒张末期容积")
         self.edv_title.setAlignment(Qt.AlignCenter)
         self.edv_title.setStyleSheet("color: #aaaaaa; font-size: 10px;")
         self.edv_title.setFixedHeight(15)  # 固定标签高度
@@ -157,7 +150,7 @@ class MedSAMTab(QWidget):
         esv_layout.setContentsMargins(2, 2, 2, 2)
         esv_layout.setSpacing(0)
         
-        self.esv_title = QLabel("ESV")
+        self.esv_title = QLabel("收缩末期容积")
         self.esv_title.setAlignment(Qt.AlignCenter)
         self.esv_title.setStyleSheet("color: #aaaaaa; font-size: 10px;")
         self.esv_title.setFixedHeight(15)  # 固定标签高度
@@ -179,12 +172,12 @@ class MedSAMTab(QWidget):
         # 加载按钮部分
         load_buttons_layout = QHBoxLayout()
         
-        self.load_edv_button = QPushButton("Load EDV Mask")
+        self.load_edv_button = QPushButton("加载EDV掩码")
         self.load_edv_button.clicked.connect(self.load_edv_mask)
         self.load_edv_button.setFixedHeight(30)
         self.load_edv_button.setMinimumWidth(120)  # 确保按钮宽度足够显示文字
         
-        self.load_esv_button = QPushButton("Load ESV Mask")
+        self.load_esv_button = QPushButton("加载ESV掩码")
         self.load_esv_button.clicked.connect(self.load_esv_mask)
         self.load_esv_button.setFixedHeight(30)
         self.load_esv_button.setMinimumWidth(120)  # 确保按钮宽度足够显示文字
@@ -218,21 +211,21 @@ class MedSAMTab(QWidget):
         discs_layout.addWidget(self.disc_count, 4)
         discs_layout.addWidget(self.disc_value_label, 1)
         
-        params_layout.addRow("Number of Discs:", discs_container)
+        params_layout.addRow("碟片数量:", discs_container)
         
         # 添加长轴长度校准设置
         self.pixel_scale_input = QLineEdit("0.2")  # 默认值，根据实际情况调整
-        params_layout.addRow("Pixel Scale (mm/pixel):", self.pixel_scale_input)
+        params_layout.addRow("像素比例(毫米/像素):", self.pixel_scale_input)
         
         # 添加计算方法选择
         self.method_combo = QComboBox()
-        self.method_combo.addItems(["Simpson (Biplane)", "Pixel Count", "Simpson (Single Plane)"])
-        params_layout.addRow("Calculation Method:", self.method_combo)
+        self.method_combo.addItems(["Simpson (双平面)", "像素计数", "Simpson (单平面)"])
+        params_layout.addRow("计算方法:", self.method_combo)
         
         right_content_layout.addWidget(params_frame)
         
         # 添加计算按钮
-        self.calculate_ef_button = QPushButton("Calculate EF")
+        self.calculate_ef_button = QPushButton("计算射血分数")
         self.calculate_ef_button.clicked.connect(self.calculate_ef)
         self.calculate_ef_button.setStyleSheet("font-weight: bold; height: 30px;")
         right_content_layout.addWidget(self.calculate_ef_button)
@@ -246,24 +239,24 @@ class MedSAMTab(QWidget):
         # 添加容积显示标签，使用更清晰的格式
         self.edv_volume_label = QLabel("0.00 mL")
         self.edv_volume_label.setStyleSheet("font-weight: bold;")
-        results_layout.addRow("EDV Volume:", self.edv_volume_label)
+        results_layout.addRow("EDV容积:", self.edv_volume_label)
         
         self.esv_volume_label = QLabel("0.00 mL")
         self.esv_volume_label.setStyleSheet("font-weight: bold;")
-        results_layout.addRow("ESV Volume:", self.esv_volume_label)
+        results_layout.addRow("ESV容积:", self.esv_volume_label)
         
         self.ef_result_label = QLabel("0.00%")
         self.ef_result_label.setStyleSheet("font-weight: bold; color: #0066cc;")
-        results_layout.addRow("EF:", self.ef_result_label)
+        results_layout.addRow("射血分数:", self.ef_result_label)
         
         self.ef_category_label = QLabel("---")
         self.ef_category_label.setStyleSheet("font-style: italic;")
-        results_layout.addRow("Category:", self.ef_category_label)
+        results_layout.addRow("类别:", self.ef_category_label)
         
         right_content_layout.addWidget(results_frame)
         
         # 添加提示信息
-        status_label = QLabel("Masks loaded: None")
+        status_label = QLabel("掩码加载状态: 无")
         status_label.setStyleSheet("color: #666666; font-style: italic;")
         status_label.setAlignment(Qt.AlignCenter)
         self.mask_status_label = status_label
@@ -341,42 +334,9 @@ class MedSAMTab(QWidget):
         self.view.viewport().installEventFilter(self)
 
     def create_file_browser(self):
-        """创建文件浏览器组件"""
-        # 创建文件浏览器的浮动窗口
-        file_dock = QDockWidget("文件浏览器", self.inner_main_window)
-        file_dock.setFeatures(QDockWidget.DockWidgetFloatable | QDockWidget.DockWidgetMovable)
-        file_dock.setAllowedAreas(Qt.AllDockWidgetAreas)
-        
-        # 创建文件浏览器容器和布局
-        file_container = QWidget()
-        file_layout = QVBoxLayout(file_container)
-        
-        # 创建树形文件浏览器
-        self.file_tree = QTreeWidget()
-        self.file_tree.setHeaderLabel("文件")
-        self.file_tree.itemDoubleClicked.connect(self.open_selected_file)
-        
-        # 添加按钮
-        button_layout = QHBoxLayout()
-        
-        load_folder_btn = QPushButton("加载文件夹")
-        load_folder_btn.clicked.connect(self.load_folder)
-        
-        refresh_btn = QPushButton("刷新")
-        refresh_btn.clicked.connect(self.refresh_file_tree)
-        
-        button_layout.addWidget(load_folder_btn)
-        button_layout.addWidget(refresh_btn)
-        
-        # 添加到布局
-        file_layout.addWidget(self.file_tree)
-        file_layout.addLayout(button_layout)
-        
-        # 设置文件浏览器容器为dock部件的内容
-        file_dock.setWidget(file_container)
-        
-        # 添加到内部主窗口的侧边
-        self.inner_main_window.addDockWidget(Qt.LeftDockWidgetArea, file_dock)
+        """创建文件浏览器组件 - 已禁用，只保留图像预览区域"""
+        # 此方法已修改，不再创建文件浏览器
+        pass
 
     def load_folder(self):
         """加载文件夹并创建树形结构"""
@@ -830,7 +790,7 @@ class MedSAMTab(QWidget):
         """更新掩码加载状态"""
         edv_status = "EDV ✓" if self.edv_mask is not None else "EDV ✗"
         esv_status = "ESV ✓" if self.esv_mask is not None else "ESV ✗"
-        self.mask_status_label.setText(f"Masks loaded: {edv_status}, {esv_status}")
+        self.mask_status_label.setText(f"掩码加载状态: {edv_status}, {esv_status}")
         if self.edv_mask is not None and self.esv_mask is not None:
             self.mask_status_label.setStyleSheet("color: green; font-style: italic;")
         else:
@@ -1008,7 +968,7 @@ class MedSAMTab(QWidget):
     def calculate_ef(self):
         """计算射血分数(EF)"""
         if self.edv_mask is None or self.esv_mask is None:
-            self.status_bar.showMessage("Please load both EDV and ESV masks first")
+            self.status_bar.showMessage("请先加载EDV和ESV掩码")
             return
 
         # 获取计算方法
@@ -1019,14 +979,14 @@ class MedSAMTab(QWidget):
             pixel_scale = float(self.pixel_scale_input.text())
             disc_count = self.disc_count.value()
         except ValueError:
-            self.status_bar.showMessage("Invalid pixel scale value")
+            self.status_bar.showMessage("像素比例值无效")
             return
         
         # 根据选择的方法计算体积
-        if method == "Simpson (Biplane)":
+        if method == "Simpson (双平面)":
             edv_vol = self.calculate_simpson_biplane(self.edv_mask, pixel_scale, disc_count)
             esv_vol = self.calculate_simpson_biplane(self.esv_mask, pixel_scale, disc_count)
-        elif method == "Simpson (Single Plane)":
+        elif method == "Simpson (单平面)":
             edv_vol = self.calculate_simpson_single_plane(self.edv_mask, pixel_scale, disc_count)
             esv_vol = self.calculate_simpson_single_plane(self.esv_mask, pixel_scale, disc_count)
         else:  # 像素计数法
@@ -1040,7 +1000,7 @@ class MedSAMTab(QWidget):
 
         # 计算EF
         if edv_vol <= 0:
-            self.status_bar.showMessage("EDV volume is zero or negative!")
+            self.status_bar.showMessage("EDV容积为零或负值!")
             return
 
         ef = (edv_vol - esv_vol) * 100.0 / edv_vol
@@ -1052,28 +1012,28 @@ class MedSAMTab(QWidget):
         
         # 更新EF分类标签
         if ef >= 55:
-            category = "Normal EF"
+            category = "正常射血分数"
             self.ef_category_label.setStyleSheet("font-style: italic; color: green;")
         elif ef >= 45:
-            category = "Mildly Reduced EF"
+            category = "轻度降低"
             self.ef_category_label.setStyleSheet("font-style: italic; color: #66cc00;")
         elif ef >= 30:
-            category = "Moderately Reduced EF"
+            category = "中度降低"
             self.ef_category_label.setStyleSheet("font-style: italic; color: #ffcc00;")
         else:
-            category = "Severely Reduced EF"
+            category = "严重降低"
             self.ef_category_label.setStyleSheet("font-style: italic; color: red;")
             
         self.ef_category_label.setText(category)
         
         # 更新状态栏
-        self.status_bar.showMessage(f"EF calculated: {ef:.2f}% using {method}")
+        self.status_bar.showMessage(f"射血分数计算完成: {ef:.2f}% 使用 {method} 方法")
         
         # 显示结果的详细解释
         result_message = f"EDV: {edv_vol:.2f} mL, ESV: {esv_vol:.2f} mL, EF: {ef:.2f}% - {category}"
             
         # 更新状态栏显示详细结果
-        self.status_bar.showMessage(result_message) 
+        self.status_bar.showMessage(result_message)
 
     def set_file_tree(self, file_tree):
         """设置共享的文件树"""

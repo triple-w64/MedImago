@@ -1,1 +1,1 @@
-Super-Resolution
+Splitter

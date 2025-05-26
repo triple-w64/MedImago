@@ -94,6 +94,9 @@ class MainApp(QMainWindow):
         window_height = min(900, screen_size.height() - 100)
         self.resize(window_width, window_height)
         
+        # 设置最小窗口大小，避免显示不全
+        self.setMinimumSize(900, 600)
+        
         # 将窗口居中显示
         self.center_window()
 
@@ -577,7 +580,7 @@ class MainApp(QMainWindow):
     def create_tabs(self):
         """创建标签页"""
         # 标签页名称
-        self.tab_names = ["Super-Resolution", "Segmentation", "Static 3D Reconstruction"]
+        self.tab_names = ["超分辨率", "分割", "3D重建"]
         
         # 使用可停靠部件代替普通标签
         self.dockable_widgets = {}
@@ -616,6 +619,9 @@ class MainApp(QMainWindow):
         current_tab = self.tab_widget.widget(index)
         self.open_action.setEnabled(True)  # 所有标签页都可以打开文件
         self.clear_action.setEnabled(True)  # 所有标签页都可以清除内容
+        
+        # 关闭可能打开的对话框
+        self._close_open_dialogs()
         
         # 检查当前标签页类型，更新工具栏按钮状态
         if index == 0:  # 超分辨率标签页
@@ -676,12 +682,28 @@ class MainApp(QMainWindow):
             self.recons_tab.vtk_widget.setVisible(True)
             if hasattr(self.recons_tab.vtk_widget, 'GetRenderWindow'):
                 self.recons_tab.vtk_widget.GetRenderWindow().Render()
-            
-            # 延迟一小段时间以确保正确渲染
-            QApplication.processEvents()
+        
+        # 强制布局更新和内容刷新，但不改变窗口大小
+        current_tab.setVisible(True)  # 确保标签页可见
+        current_tab.repaint()  # 强制重绘
+        
+        # 处理事件以确保UI更新
+        QApplication.processEvents()
         
         # 更新状态栏
-        self.status_bar.showMessage(f"Switched to {self.tab_names[index]} tab")
+        self.status_bar.showMessage(f"已切换到{self.tab_names[index]}标签页")
+        
+    def _close_open_dialogs(self):
+        """关闭所有打开的对话框"""
+        # 关闭超分辨率标签页中可能打开的对话框
+        if hasattr(self, 'sr_tab'):
+            if hasattr(self.sr_tab, 'window_level_dialog') and self.sr_tab.window_level_dialog is not None:
+                self.sr_tab.window_level_dialog.close()
+                self.sr_tab.window_level_dialog = None
+                
+            if hasattr(self.sr_tab, 'brightness_contrast_dialog') and self.sr_tab.brightness_contrast_dialog is not None:
+                self.sr_tab.brightness_contrast_dialog.close()
+                self.sr_tab.brightness_contrast_dialog = None
 
     def handle_open(self):
         """处理打开文件动作"""
@@ -690,9 +712,9 @@ class MainApp(QMainWindow):
             if isinstance(current_tab, SuperResolutionTab):
                 file_path, _ = QFileDialog.getOpenFileName(
                     self, 
-                    "Open File",
+                    "打开文件",
                     "",
-                    "All Supported Files (*.png *.jpg *.bmp *.mp4 *.avi *.mkv);;Images (*.png *.jpg *.bmp);;Videos (*.mp4 *.avi *.mkv)"
+                    "所有支持的文件 (*.png *.jpg *.bmp *.mp4 *.avi *.mkv);;图像文件 (*.png *.jpg *.bmp);;视频文件 (*.mp4 *.avi *.mkv)"
                 )
                 if file_path:
                     # 使用文件扩展名过滤
@@ -701,13 +723,13 @@ class MainApp(QMainWindow):
                         current_tab.load_video(file_path)
                     elif ext in ('.png', '.jpg', '.jpeg', '.bmp'):
                         current_tab.load_image(file_path)
-                    self.status_bar.showMessage(f"Opened: {file_path}")
+                    self.status_bar.showMessage(f"已打开: {file_path}")
             elif isinstance(current_tab, MedSAMTab):
                 current_tab.load_image()
             elif isinstance(current_tab, VTKReconstructionTab):
                 current_tab.load_dicom()
         except Exception as e:
-            self.status_bar.showMessage(f"Error opening file: {str(e)}")
+            self.status_bar.showMessage(f"打开文件时出错: {str(e)}")
 
     def handle_clear(self):
         """处理清除图像/模型动作"""
