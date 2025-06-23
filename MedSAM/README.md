@@ -113,6 +113,62 @@ python train_one_gpu.py
 - We also thank Alexandre Bonnet for sharing this great [blog](https://encord.com/blog/learn-how-to-fine-tune-the-segment-anything-model-sam/)
 
 
+## 心脏运动追踪模块
+
+我们新增了一个心脏运动追踪模块，专门用于处理心脏视频序列。该模块能够：
+
+1. 使用轻量级卷积网络检测视频帧间的运动区域（例如心脏瓣膜）
+2. 为每一帧生成运动热力图
+3. 基于运动热力图自动分割心脏结构
+4. 在视频上实时追踪运动区域
+
+### 使用方法
+
+```bash
+python cardiac_demo.py --input [视频文件或图像序列文件夹] --output [输出目录]
+```
+
+参数说明：
+- `--input`: 输入视频文件路径或包含视频帧的文件夹路径
+- `--output`: 输出结果保存路径（默认: ./output）
+- `--sam_checkpoint`: MedSAM模型检查点路径（默认: work_dir/MedSAM/medsam_vit_b.pth）
+- `--model_type`: SAM模型类型（默认: vit_b）
+- `--device`: 使用的设备（默认: cuda:0）
+- `--motion_threshold`: 运动热力图阈值，大于此值的区域被视为运动区域（默认: 0.3）
+
+### 输出文件
+
+该模块会生成以下输出：
+- `motion_heatmap.mp4`: 运动热力图视频
+- `segmentation_overlay.mp4`: 分割结果叠加视频
+- 关键帧的热力图和分割结果图像
+
+### 在您的项目中使用
+
+您可以在自己的代码中引入心脏运动追踪模块：
+
+```python
+from segment_anything import sam_model_registry
+from cardiac_motion_tracker import CardiacMotionTracker
+
+# 加载MedSAM模型
+sam_model = sam_model_registry["vit_b"](checkpoint="path/to/checkpoint")
+sam_model.to(device)
+sam_model.eval()
+
+# 创建心脏运动追踪器
+motion_tracker = CardiacMotionTracker(
+    sam_model=sam_model,
+    motion_threshold=0.3
+)
+
+# 处理单帧
+result = motion_tracker.process_frame(frame_tensor)  # frame_tensor: [B, 3, H, W]
+
+# 处理整个视频
+results = motion_tracker.process_video(video_frames)  # video_frames: list of [3, H, W] tensors
+```
+
 ## Reference
 
 ```
