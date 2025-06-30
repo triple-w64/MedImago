@@ -1,0 +1,19 @@
+{
+	"BUILD_DIR" : "/home/jm/SEG/MedImago/C+/build/MedImago_autogen",
+	"CMAKE_BINARY_DIR" : "/home/jm/SEG/MedImago/C+/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/jm/SEG/MedImago/C+/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/jm/SEG/MedImago/C+",
+	"CMAKE_SOURCE_DIR" : "/home/jm/SEG/MedImago/C+",
+	"INCLUDE_DIR" : "/home/jm/SEG/MedImago/C+/build/MedImago_autogen/include",
+	"INPUTS" : [],
+	"LOCK_FILE" : "/home/jm/SEG/MedImago/C+/build/CMakeFiles/MedImago_autogen.dir/AutoRcc_resources_3YJK5W5UP7_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "resources" ],
+	"OUTPUT_CHECKSUM" : "3YJK5W5UP7",
+	"OUTPUT_NAME" : "qrc_resources.cpp",
+	"RCC_EXECUTABLE" : "/home/jm/anaconda3/bin/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/jm/SEG/MedImago/C+/build/CMakeFiles/MedImago_autogen.dir/AutoRcc_resources_3YJK5W5UP7_Used.txt",
+	"SOURCE" : "/home/jm/SEG/MedImago/C+/resources/resources.qrc",
+	"VERBOSITY" : 0
+}

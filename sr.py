@@ -3,6 +3,10 @@ import time
 import cv2
 import numpy as np
 import math
+import sys
+import torch
+import torch.nn as nn
+from PIL import Image
 from PyQt5.QtWidgets import (
     QLabel, QPushButton, QFileDialog, QFrame, QSplitter, 
     QVBoxLayout, QHBoxLayout, QWidget, QComboBox, QSpinBox,
@@ -15,6 +19,20 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF, QRect, QSize
 from PyQt5.QtGui import QImage, QPixmap, QFont, QWheelEvent, QCursor, QPainter, QBrush, QColor, QPen, QKeySequence
 from PyQt5.QtWidgets import QShortcut
+
+# 添加Model目录到路径
+model_dir = os.path.join(os.path.dirname(__file__), 'Model')
+if model_dir not in sys.path:
+    sys.path.insert(0, model_dir)
+
+# 导入网络结构
+try:
+    from echospan_net import EchoSPANNet
+    from FPRAEcho import IPGGNNEchoSPANNet
+except ImportError as e:
+    print(f"Warning: Could not import network modules: {e}")
+    EchoSPANNet = None
+    IPGGNNEchoSPANNet = None
 
 # 添加窗位窗宽调整对话框
 class WindowLevelDialog(QDialog):
@@ -330,6 +348,12 @@ class SuperResolutionTab(QWidget):
         self.image_path = None
         self.sr_result = None
         
+        # 添加模型相关的初始化
+        self.sr_model = None
+        self.model_type = None  # "opencv" 或 "pytorch"
+        self.device = None
+        self._current_model = None
+        
         # 主布局改为水平布局
         self.main_layout = QHBoxLayout(self)
         splitter = QSplitter(Qt.Horizontal)
@@ -358,6 +382,13 @@ class SuperResolutionTab(QWidget):
 
         # 设置快捷键
         self.setup_shortcuts()
+    
+    def __del__(self):
+        """析构函数，清理资源"""
+        try:
+            self._cleanup_model()
+        except:
+            pass
     
     def set_file_tree(self, file_tree):
         """设置共享的文件树"""
@@ -776,7 +807,7 @@ class SuperResolutionTab(QWidget):
         algo_layout = QHBoxLayout()
         self.algo_label = QLabel("SR算法:")
         self.algo_combo = QComboBox()
-        self.algo_combo.addItems(["Bilinear", "Bicubic", "EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"])
+        self.algo_combo.addItems(["Bilinear", "Bicubic", "EDSR", "ESPCN", "FSRCNN", "LAPSRN","IPGSPAN", "SPAN" ])
         algo_layout.addWidget(self.algo_label)
         algo_layout.addWidget(self.algo_combo)
         algo_layout.addStretch()
@@ -970,7 +1001,7 @@ class SuperResolutionTab(QWidget):
         
         start_time = time.time()
 
-        if algorithm in ["EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN"]:
+        if algorithm in ["EDSR", "ESPCN", "FSRCNN", "EchoSR", "LAPSRN", "SPAN", "IPGSPAN"]:
             model_loaded = self.load_dnn_sr_model(algorithm, scale)
             if not model_loaded:
                 self.status_bar.showMessage(f"无法加载 {algorithm} 模型，请检查模型文件是否存在")
@@ -1008,7 +1039,8 @@ class SuperResolutionTab(QWidget):
 
     def load_dnn_sr_model(self, method, scale):
         """优化模型加载过程"""
-        model_paths = {
+        # 传统OpenCV DNN模型
+        opencv_models = {
             "EDSR": f"Model/EDSR_x{scale}.pb",
             "ESPCN": f"Model/ESPCN_x{scale}.pb",
             "FSRCNN": f"Model/FSRCNN_x{scale}.pb",
@@ -1016,35 +1048,149 @@ class SuperResolutionTab(QWidget):
             "LAPSRN": f"Model/LAPSRN_x{scale}.pb"
         }
         
-        model_path = model_paths[method]
+        # PyTorch模型
+        pytorch_models = {
+            "SPAN": f"Model/echospannet_scale{scale}_best.pth",
+            "IPGSPAN": f"Model/ipggnnechospannet_scale{scale}_best.pth"
+        }
         
+        # 检查模型是否已经加载过，避免重复加载相同的模型
+        if hasattr(self, '_current_model') and self._current_model == (method, scale):
+            return True
+            
+        # 清理之前的模型
+        self._cleanup_model()
+            
+        # 记录当前加载的模型
+        self._current_model = (method, scale)
+        
+        if method in opencv_models:
+            return self._load_opencv_model(method, scale, opencv_models[method])
+        elif method in pytorch_models:
+            return self._load_pytorch_model(method, scale, pytorch_models[method])
+        else:
+            error_msg = f"不支持的模型类型: {method}"
+            self.status_bar.showMessage(error_msg)
+            return False
+    
+    def _load_opencv_model(self, method, scale, model_path):
+        """加载OpenCV DNN模型"""
         # 显示模型路径，便于调试
         full_path = os.path.join(os.getcwd(), model_path)
-        self.status_bar.showMessage(f"正在加载模型: {full_path}")
+        self.status_bar.showMessage(f"正在加载OpenCV模型: {full_path}")
         
         if not os.path.exists(full_path):
             error_msg = f"错误: 模型文件不存在: {full_path}"
             self.status_bar.showMessage(error_msg)
             print(error_msg)
             return False
-        
-        # 检查模型是否已经加载过，避免重复加载相同的模型
-        if hasattr(self, '_current_model') and self._current_model == (method, scale):
-            return True
-            
-        # 记录当前加载的模型
-        self._current_model = (method, scale)
             
         try:
-        # 加载模型
+            # 加载模型
             import cv2.dnn_superres
             self.sr_model = cv2.dnn_superres.DnnSuperResImpl_create()
             self.sr_model.readModel(full_path)
             self.sr_model.setModel(method.lower(), scale)
-            self.status_bar.showMessage(f"模型加载成功: {method} x{scale}")
+            self.model_type = "opencv"
+            self.status_bar.showMessage(f"OpenCV模型加载成功: {method} x{scale}")
             return True
         except Exception as e:
             error_msg = f"模型加载错误: {str(e)}"
+            self.status_bar.showMessage(error_msg)
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _load_pytorch_model(self, method, scale, model_path):
+        """加载PyTorch模型"""
+        if method == "SPAN" and EchoSPANNet is None:
+            error_msg = "EchoSPANNet网络模块未正确导入，无法加载SPAN模型"
+            self.status_bar.showMessage(error_msg)
+            return False
+        elif method == "IPGSPAN" and IPGGNNEchoSPANNet is None:
+            error_msg = "IPGGNNEchoSPANNet网络模块未正确导入，无法加载IPGSPAN模型"
+            self.status_bar.showMessage(error_msg)
+            return False
+            
+        # 显示模型路径，便于调试
+        full_path = os.path.join(os.getcwd(), model_path)
+        self.status_bar.showMessage(f"正在加载PyTorch模型: {full_path}")
+        
+        if not os.path.exists(full_path):
+            error_msg = f"错误: 模型文件不存在: {full_path}"
+            self.status_bar.showMessage(error_msg)
+            print(error_msg)
+            return False
+            
+        try:
+            # 设置设备
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            
+            # 根据方法创建相应的网络
+            if method == "SPAN":
+                self.status_bar.showMessage(f"正在创建EchoSPANNet网络 (scale={scale})...")
+                self.sr_model = EchoSPANNet(
+                    scale=scale,
+                    in_channels=1,
+                    out_channels=1,
+                    feature_channels=48,
+                    num_blocks=6,
+                    use_fourier=True,
+                    img_range=1.0,
+                    ultrasound_mode=True
+                )
+            elif method == "IPGSPAN":
+                self.status_bar.showMessage(f"正在创建IPGGNNEchoSPANNet网络 (scale={scale})...")
+                self.sr_model = IPGGNNEchoSPANNet(
+                    scale=scale,
+                    in_channels=1,
+                    out_channels=1,
+                    feature_channels=48,
+                    num_blocks=6,
+                    use_fourier=True,
+                    img_range=1.0,
+                    ultrasound_mode=True,
+                    base_patch_size=64,
+                    use_ipg=True,
+                    max_degree=8
+                )
+            else:
+                raise ValueError(f"不支持的PyTorch模型类型: {method}")
+            
+            # 加载预训练权重
+            self.status_bar.showMessage(f"正在加载预训练权重...")
+            checkpoint = torch.load(full_path, map_location=self.device)
+            
+            # 兼容不同的保存格式
+            if 'model_state_dict' in checkpoint:
+                state_dict = checkpoint['model_state_dict']
+                self.status_bar.showMessage("检测到model_state_dict格式")
+            elif 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+                self.status_bar.showMessage("检测到state_dict格式")
+            else:
+                state_dict = checkpoint
+                self.status_bar.showMessage("使用直接权重格式")
+            
+            # 加载状态字典
+            self.status_bar.showMessage("正在应用权重到模型...")
+            missing_keys, unexpected_keys = self.sr_model.load_state_dict(state_dict, strict=False)
+            
+            if missing_keys:
+                print(f"Warning: Missing keys in state dict: {missing_keys}")
+            if unexpected_keys:
+                print(f"Warning: Unexpected keys in state dict: {unexpected_keys}")
+                
+            self.sr_model.to(self.device)
+            self.sr_model.eval()
+            
+            self.model_type = "pytorch"
+            self.status_bar.showMessage(f"PyTorch模型加载成功: {method} x{scale}")
+            return True
+            
+        except Exception as e:
+            error_msg = f"PyTorch模型加载错误: {str(e)}"
             self.status_bar.showMessage(error_msg)
             print(error_msg)
             import traceback
@@ -1057,36 +1203,134 @@ class SuperResolutionTab(QWidget):
             if self.image is None:
                 self.status_bar.showMessage("没有图像可处理")
                 return None
+            
+            # 根据模型类型调用不同的推理方法
+            if hasattr(self, 'model_type') and self.model_type == "pytorch":
+                return self._run_pytorch_inference()
+            else:
+                return self._run_opencv_inference()
                 
-            # 确保图像是3通道的，但保留原始图像类型信息
-            input_image = self.image.copy()
-            original_is_grayscale = False
-            
-            if len(input_image.shape) == 2:
-                # 单通道灰度图
-                original_is_grayscale = True
-                input_image = cv2.cvtColor(input_image, cv2.COLOR_GRAY2BGR)
-            elif len(input_image.shape) == 3 and input_image.shape[2] == 1:
-                # 单通道灰度图（带通道维度）
-                original_is_grayscale = True
-                input_image = cv2.cvtColor(input_image.squeeze(2), cv2.COLOR_GRAY2BGR)
-            elif input_image.shape[2] == 4:
-                # 将RGBA图像转换为BGR
-                input_image = cv2.cvtColor(input_image, cv2.COLOR_RGBA2BGR)
-            
-            # 调用SR模型
-            result = self.sr_model.upsample(input_image)
-            
-            # 如果原图是灰度图，将结果转回灰度
-            if original_is_grayscale:
-                result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-                
-            return result
         except Exception as e:
             self.status_bar.showMessage(f"Error: {str(e)}")
             import traceback
             traceback.print_exc()
             return None
+    
+    def _run_opencv_inference(self):
+        """运行OpenCV DNN模型推理"""
+        # 确保图像是3通道的，但保留原始图像类型信息
+        input_image = self.image.copy()
+        original_is_grayscale = False
+        
+        if len(input_image.shape) == 2:
+            # 单通道灰度图
+            original_is_grayscale = True
+            input_image = cv2.cvtColor(input_image, cv2.COLOR_GRAY2BGR)
+        elif len(input_image.shape) == 3 and input_image.shape[2] == 1:
+            # 单通道灰度图（带通道维度）
+            original_is_grayscale = True
+            input_image = cv2.cvtColor(input_image.squeeze(2), cv2.COLOR_GRAY2BGR)
+        elif input_image.shape[2] == 4:
+            # 将RGBA图像转换为BGR
+            input_image = cv2.cvtColor(input_image, cv2.COLOR_RGBA2BGR)
+        
+        # 调用SR模型
+        result = self.sr_model.upsample(input_image)
+        
+        # 如果原图是灰度图，将结果转回灰度
+        if original_is_grayscale:
+            result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+            
+        return result
+    
+    def _run_pytorch_inference(self):
+        """运行PyTorch模型推理"""
+        try:
+            # 预处理图像
+            input_image = self._preprocess_image_for_pytorch(self.image)
+            
+            # 转换为PyTorch张量
+            input_tensor = torch.from_numpy(input_image).unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+            input_tensor = input_tensor.to(self.device)
+            
+            # 模型推理
+            with torch.no_grad():
+                output_tensor = self.sr_model(input_tensor)
+            
+            # 后处理
+            output_array = self._postprocess_pytorch_output(output_tensor)
+            
+            return output_array
+            
+        except Exception as e:
+            self.status_bar.showMessage(f"PyTorch推理错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _preprocess_image_for_pytorch(self, image):
+        """为PyTorch模型预处理图像"""
+        # 复制图像以避免修改原始数据
+        input_image = image.copy()
+        
+        # 转换为灰度图（PyTorch模型期望单通道输入）
+        if len(input_image.shape) == 3:
+            if input_image.shape[2] == 3:
+                # BGR转灰度
+                input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+            elif input_image.shape[2] == 4:
+                # RGBA转灰度
+                input_image = cv2.cvtColor(input_image, cv2.COLOR_RGBA2GRAY)
+            elif input_image.shape[2] == 1:
+                # 已经是单通道，去掉最后一个维度
+                input_image = input_image.squeeze(2)
+        elif len(input_image.shape) == 2:
+            # 已经是灰度图
+            pass
+        else:
+            raise ValueError(f"不支持的图像维度: {input_image.shape}")
+        
+        # 归一化到[0,1]
+        input_image = input_image.astype(np.float32) / 255.0
+        
+        return input_image
+    
+    def _postprocess_pytorch_output(self, output_tensor):
+        """后处理PyTorch模型输出"""
+        # 移除batch和channel维度
+        if output_tensor.dim() == 4:  # [1, 1, H, W]
+            output_tensor = output_tensor.squeeze(0).squeeze(0)
+        elif output_tensor.dim() == 3:  # [1, H, W]
+            output_tensor = output_tensor.squeeze(0)
+        
+        # 转换为numpy数组
+        output_array = output_tensor.cpu().numpy()
+        
+        # 反归一化并裁剪到有效范围
+        output_array = np.clip(output_array * 255.0, 0, 255).astype(np.uint8)
+        
+        return output_array
+    
+    def _cleanup_model(self):
+        """清理当前加载的模型"""
+        try:
+            if self.sr_model is not None:
+                if self.model_type == "pytorch":
+                    # 清理PyTorch模型
+                    if hasattr(self.sr_model, 'cpu'):
+                        self.sr_model.cpu()
+                    del self.sr_model
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                else:
+                    # 清理OpenCV模型
+                    del self.sr_model
+                    
+                self.sr_model = None
+                self.model_type = None
+                
+        except Exception as e:
+            print(f"模型清理时出错: {str(e)}")
 
     def save_result(self):
         if self.sr_result is None:
